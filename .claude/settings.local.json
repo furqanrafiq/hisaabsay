@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version)",
+      "Bash(npm --version)",
+      "Bash(npx create-expo-app@latest . --template blank-typescript)",
+      "Bash(npx create-expo-app@latest . --template blank-typescript --yes)",
+      "Bash(cd /tmp)",
+      "Bash(npx create-expo-app@latest hisaabsay --template blank-typescript)",
+      "Bash(rsync -a --exclude='node_modules' /tmp/hisaabsay/ /c/Users/Administrator/hisaabsay/)",
+      "Bash(tar cf - -T -)",
+      "Bash(tar xf - -C /c/Users/Administrator/hisaabsay/)",
+      "Bash(npm install)",
+      "Bash(npx expo login)"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(EXPO_TOKEN=FpLOoWpipcPdRdm5JTZn9xr-7cB9Z6oXOZRJo6vN npx expo whoami)",
+      "Bash(EXPO_TOKEN=FpLOoWpipcPdRdm5JTZn9xr-7cB9Z6oXOZRJo6vN npx expo start)",
+      "Bash(EXPO_TOKEN=FpLOoWpipcPdRdm5JTZn9xr-7cB9Z6oXOZRJo6vN npx expo start --port 8082)",
+      "Bash(npm install expo@~52.0.0 expo-status-bar@~2.0.0)",
+      "Bash(EXPO_TOKEN=FpLOoWpipcPdRdm5JTZn9xr-7cB9Z6oXOZRJo6vN npx expo install --fix)",
+      "Bash(npm install --legacy-peer-deps react@18.3.1 react-native@0.76.9 @types/react@~18.3.12)",
+      "Bash(EXPO_TOKEN=FpLOoWpipcPdRdm5JTZn9xr-7cB9Z6oXOZRJo6vN npx expo install --fix --npm -- --legacy-peer-deps)",
+      "Bash(npm install expo-asset --legacy-peer-deps)",
+      "Bash(npm install --legacy-peer-deps)"
+    ]
+  }
+}
