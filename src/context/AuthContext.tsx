@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserProfile } from '@/types';
-import { mockSendOTP, mockVerifyOTP, saveSession, loadSession, clearSession } from '@/services/auth';
-import { loadData, saveData, STORAGE_KEYS } from '@/services/storage';
+import { sendOTP as apiSendOTP, verifyOTP as apiVerifyOTP, logout as apiLogout } from '@/services/auth';
+import { apiFetch } from '@/services/api';
+import { getAuthToken } from '@/services/token';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -22,36 +23,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const phone = await loadSession();
-      if (phone) {
-        const profile = await loadData<UserProfile>(STORAGE_KEYS.PROFILE);
-        if (profile) { setUser(profile); setIsAuthenticated(true); }
+      const token = await getAuthToken();
+      if (token) {
+        try {
+          const profile = await apiFetch<UserProfile>('/profile');
+          setUser(profile);
+          setIsAuthenticated(true);
+        } catch {
+          await apiLogout();
+        }
       }
       setIsLoading(false);
     })();
   }, []);
 
   const sendOTP = async (contact: string) => {
-    await mockSendOTP(contact);
+    await apiSendOTP(contact);
   };
 
   const verifyOTP = async (contact: string, otp: string) => {
-    const profile = await mockVerifyOTP(contact, otp);
-    await saveSession(contact);
+    const profile = await apiVerifyOTP(contact, otp);
     setUser(profile);
     setIsAuthenticated(true);
   };
 
   const logout = async () => {
-    await clearSession();
+    await apiLogout();
     setUser(null);
     setIsAuthenticated(false);
   };
 
   const updateProfile = async (patch: Partial<UserProfile>) => {
     if (!user) return;
-    const updated = { ...user, ...patch };
-    await saveData(STORAGE_KEYS.PROFILE, updated);
+    const updated = await apiFetch<UserProfile>('/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ ...user, ...patch }),
+    });
     setUser(updated);
   };
 
