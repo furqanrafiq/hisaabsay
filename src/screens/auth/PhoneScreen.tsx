@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AppInput } from '@/components/common/AppInput';
@@ -13,7 +13,9 @@ export function PhoneScreen({ navigation }: Props) {
   const [contact, setContact] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { sendOTP } = useAuth();
+  const { sendOTP, logout } = useAuth();
+
+  useEffect(() => { logout(); }, []);
 
   const handleSend = async () => {
     if (contact.trim().length < 5) { setError('Enter a valid phone or email'); return; }

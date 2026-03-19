@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const TOKEN_KEY = 'hisaabsay/auth_token';
+const TOKEN_KEY = 'hisaabsay_auth_token';
 
 export async function getAuthToken(): Promise<string | null> {
   return (await SecureStore.getItemAsync(TOKEN_KEY)) ?? null;

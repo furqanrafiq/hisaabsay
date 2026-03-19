@@ -34,8 +34,8 @@ export function OTPScreen({ navigation, route }: Props) {
     setLoading(true);
     try {
       await verifyOTP(contact, otp);
-    } catch {
-      setError('Invalid OTP. Try again.');
+    } catch (e: any) {
+      setError(e?.message || 'Invalid OTP. Try again.');
     } finally {
       setLoading(false);
     }

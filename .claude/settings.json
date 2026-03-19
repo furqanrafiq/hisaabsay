@@ -9,7 +9,11 @@
       "Bash(npm install --legacy-peer-deps react@18.3.1 react-native@0.76.9 @types/react@~18.3.12)",
       "Bash(EXPO_TOKEN=FpLOoWpipcPdRdm5JTZn9xr-7cB9Z6oXOZRJo6vN npx expo install --fix --npm -- --legacy-peer-deps)",
       "Bash(npm install expo-asset --legacy-peer-deps)",
-      "Bash(npm install --legacy-peer-deps)"
+      "Bash(npm install --legacy-peer-deps)",
+      "Bash(sqlite3 hisaabsay.db \"SELECT id, phone FROM users;\")",
+      "Bash(where go:*)",
+      "Bash(go version:*)",
+      "Bash(go run:*)"
     ]
   }
 }

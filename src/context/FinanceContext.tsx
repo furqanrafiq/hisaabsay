@@ -26,11 +26,13 @@ interface FinanceContextType {
 const FinanceContext = createContext<FinanceContextType>(null!);
 
 export function FinanceProvider({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, logout } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [customCategories, setCustomCategories] = useState<Category[]>([]);
+
+  // useEffect(() => { logout(); }, []);
 
   useEffect(() => {
     (async () => {
@@ -41,16 +43,20 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         setCustomCategories([]);
         return;
       }
-      const [t, b, g, cc] = await Promise.all([
-        apiFetch<Transaction[]>('/transactions'),
-        apiFetch<Budget[]>('/budgets'),
-        apiFetch<Goal[]>('/goals'),
-        apiFetch<Category[]>('/categories/custom'),
-      ]);
-      setTransactions(t);
-      setBudgets(b);
-      setGoals(g);
-      setCustomCategories(cc);
+      try {
+        const [t, b, g, cc] = await Promise.all([
+          apiFetch<Transaction[]>('/transactions'),
+          apiFetch<Budget[]>('/budgets'),
+          apiFetch<Goal[]>('/goals'),
+          apiFetch<Category[]>('/categories/custom'),
+        ]);
+        setTransactions(t ?? []);
+        setBudgets(b ?? []);
+        setGoals(g ?? []);
+        setCustomCategories(cc ?? []);
+      } catch (e) {
+        console.error('[FinanceContext] Failed to load data:', e);
+      }
     })();
   }, [isAuthenticated]);
 

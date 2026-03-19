@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { UserProfile } from '@/types';
 import { sendOTP as apiSendOTP, verifyOTP as apiVerifyOTP, logout as apiLogout } from '@/services/auth';
 import { apiFetch } from '@/services/api';
-import { getAuthToken } from '@/services/token';
+import { getAuthToken, clearAuthToken } from '@/services/token';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -23,17 +23,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const token = await getAuthToken();
-      if (token) {
-        try {
-          const profile = await apiFetch<UserProfile>('/profile');
-          setUser(profile);
-          setIsAuthenticated(true);
-        } catch {
-          await apiLogout();
+      try {
+        const token = await getAuthToken();
+        if (token) {
+          try {
+            const profile = await apiFetch<UserProfile>('/profile');
+            setUser(profile);
+            setIsAuthenticated(true);
+          } catch (e) {
+            console.error('[AuthContext] Failed to fetch profile:', e);
+            await apiLogout();
+          }
         }
+      } catch (e) {
+        console.error('[AuthContext] Failed to read token:', e);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     })();
   }, []);
 
