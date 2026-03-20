@@ -1,21 +1,35 @@
 export const Colors = {
-  background: '#C8E6D4',
-  card: '#FFFFFF',
-  cardMint: '#F0F7F4',
-  cardYellow: '#F5F569',
-  primary: '#2D5A3D',
-  primaryLight: '#4A8C5C',
-  income: '#4CAF50',
-  expense: '#EF5350',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#6B7280',
+  // Surfaces
+  background:    '#F1F5F9',
+  card:          '#FFFFFF',
+  cardSubtle:    '#F1F5F9',
+  cardAccent:    '#E8EDF3',
+
+  // Brand
+  primary:       '#1E293B',
+  primaryLight:  '#475569',
+  primaryMuted:  '#E2E8F0',
+
+  // Semantic
+  income:        '#16A34A',
+  expense:       '#DC2626',
+  warning:       '#D97706',
+
+  // Text
+  textPrimary:   '#0F172A',
+  textSecondary: '#64748B',
+  textTertiary:  '#94A3B8',
   textOnPrimary: '#FFFFFF',
-  border: '#E5E7EB',
-  tabBar: '#FFFFFF',
-  tabBarActive: '#2D5A3D',
-  tabBarInactive: '#9CA3AF',
-  error: '#EF5350',
-  success: '#4CAF50',
-  warning: '#F59E0B',
-  overlay: 'rgba(0,0,0,0.4)',
+
+  // Chrome
+  border:        '#E2E8F0',
+  divider:       '#EEF2F7',
+  tabBar:        '#FFFFFF',
+  tabBarActive:  '#1E293B',
+  tabBarInactive:'#94A3B8',
+
+  // States
+  error:         '#DC2626',
+  success:       '#16A34A',
+  overlay:       'rgba(0,0,0,0.45)',
 };

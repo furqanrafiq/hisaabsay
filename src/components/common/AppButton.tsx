@@ -31,16 +31,16 @@ export function AppButton({ title, onPress, variant = 'primary', loading, disabl
 
 const styles = StyleSheet.create({
   base: {
-    height: 52,
+    height: 54,
     borderRadius: Theme.radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Theme.spacing.lg,
   },
-  primary: { backgroundColor: Colors.primary },
-  secondary: { backgroundColor: Colors.cardMint, borderWidth: 1, borderColor: Colors.primary },
+  primary: { backgroundColor: Colors.primary, ...Theme.shadow.elevated },
+  secondary: { backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.primary },
   ghost: { backgroundColor: 'transparent' },
   disabled: { opacity: 0.5 },
-  text: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textOnPrimary },
-  textDark: { color: Colors.primary },
+  text: { fontSize: Theme.fontSize.md, fontWeight: '700', color: Colors.textOnPrimary, letterSpacing: 0.3 },
+  textDark: { color: Colors.primary, fontWeight: '700' },
 });

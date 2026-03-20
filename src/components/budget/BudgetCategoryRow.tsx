@@ -38,12 +38,12 @@ export function BudgetCategoryRow({ categoryId, limit, spent, pct, currency }: P
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: Theme.spacing.sm },
-  iconWrap: { width: 40, height: 40, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.sm, marginTop: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: Theme.spacing.md },
+  iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.md },
   content: { flex: 1 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  name: { fontSize: Theme.fontSize.md, fontWeight: '500', color: Colors.textPrimary },
-  amounts: { fontSize: Theme.fontSize.sm },
-  limit: { color: Colors.textSecondary },
-  pctText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, marginTop: 4 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  name: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary },
+  amounts: { fontSize: Theme.fontSize.sm, fontWeight: '600' },
+  limit: { color: Colors.textTertiary, fontWeight: '400' },
+  pctText: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 5, fontWeight: '500' },
 });

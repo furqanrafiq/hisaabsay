@@ -15,6 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { addMonths, subMonths, addYears, subYears, format } from 'date-fns';
 
 type Filter = 'all' | 'income' | 'expense';
+type FixedFilter = 'all' | 'fixed' | 'variable';
 type ViewMode = 'month' | 'year';
 
 export function TransactionsScreen() {
@@ -22,6 +23,7 @@ export function TransactionsScreen() {
   const { user } = useAuth();
   const { transactions, customCategories } = useFinance();
   const [filter, setFilter] = useState<Filter>('all');
+  const [fixedFilter, setFixedFilter] = useState<FixedFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,17 +47,23 @@ export function TransactionsScreen() {
     [periodFiltered, filter]
   );
 
+  const fixedFiltered = useMemo(() => {
+    if (fixedFilter === 'all') return typeFiltered;
+    if (fixedFilter === 'fixed') return typeFiltered.filter((t) => t.fixed === true);
+    return typeFiltered.filter((t) => !t.fixed);
+  }, [typeFiltered, fixedFilter]);
+
   const searchFiltered = useMemo(() => {
-    if (!searchQuery.trim()) return typeFiltered;
+    if (!searchQuery.trim()) return fixedFiltered;
     const q = searchQuery.toLowerCase();
-    return typeFiltered.filter((t) => {
+    return fixedFiltered.filter((t) => {
       const cat = allCategories.find((c) => c.id === t.category);
       return (
         t.note.toLowerCase().includes(q) ||
         (cat?.name.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [typeFiltered, searchQuery, allCategories]);
+  }, [fixedFiltered, searchQuery, allCategories]);
 
   const grouped: { date: string; data: Transaction[] }[] = useMemo(() => {
     const groups: { date: string; data: Transaction[] }[] = [];
@@ -149,6 +157,21 @@ export function TransactionsScreen() {
         ))}
       </View>
 
+      {/* Fixed/Variable filter */}
+      <View style={styles.fixedBar}>
+        {(['all', 'fixed', 'variable'] as FixedFilter[]).map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[styles.fixedBtn, fixedFilter === f && styles.fixedBtnActive]}
+            onPress={() => setFixedFilter(f)}
+          >
+            <Text style={[styles.fixedBtnText, fixedFilter === f && styles.fixedBtnTextActive]}>
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <FlatList
         data={grouped}
         keyExtractor={(g) => g.date}
@@ -193,7 +216,7 @@ const styles = StyleSheet.create({
   monthArrow: { fontSize: 24, color: Colors.primary, fontWeight: '500' },
   monthLabel: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary, minWidth: 110, textAlign: 'center' },
   topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  viewToggle: { flexDirection: 'row', backgroundColor: Colors.cardMint, borderRadius: Theme.radius.full, padding: 2 },
+  viewToggle: { flexDirection: 'row', backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 2 },
   viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Theme.radius.full },
   viewToggleBtnActive: { backgroundColor: Colors.primary },
   viewToggleText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '500' },
@@ -201,15 +224,20 @@ const styles = StyleSheet.create({
   searchIcon: { padding: 4 },
   searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, paddingHorizontal: Theme.spacing.md, paddingVertical: Theme.spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
   searchInput: { flex: 1, fontSize: Theme.fontSize.md, color: Colors.textPrimary, height: 36 },
-  filterBar: { flexDirection: 'row', padding: Theme.spacing.sm, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  filterBtn: { flex: 1, height: 34, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center' },
+  filterBar: { flexDirection: 'row', padding: Theme.spacing.sm, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 4 },
+  fixedBar: { flexDirection: 'row', padding: Theme.spacing.sm, paddingTop: 4, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 4 },
+  fixedBtn: { flex: 1, height: 28, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.cardSubtle },
+  fixedBtnActive: { backgroundColor: Colors.primaryLight },
+  fixedBtnText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600', letterSpacing: 0.3 },
+  fixedBtnTextActive: { color: Colors.textOnPrimary },
+  filterBtn: { flex: 1, height: 34, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.cardSubtle },
   filterActive: { backgroundColor: Colors.primary },
-  filterText: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, fontWeight: '500' },
+  filterText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600', letterSpacing: 0.3 },
   filterTextActive: { color: Colors.textOnPrimary },
   list: { padding: Theme.spacing.md, paddingBottom: 100 },
   group: { marginBottom: Theme.spacing.md },
-  dateLabel: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textSecondary, marginBottom: 6 },
-  groupCard: { backgroundColor: Colors.card, borderRadius: Theme.radius.lg, padding: Theme.spacing.md, ...Theme.shadow.card },
-  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.card },
+  dateLabel: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textTertiary, marginBottom: 6, letterSpacing: 0.8, textTransform: 'uppercase' },
+  groupCard: { backgroundColor: Colors.card, borderRadius: Theme.radius.lg, padding: Theme.spacing.md, ...Theme.shadow.card, borderWidth: 1, borderColor: Colors.border },
+  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
   fabText: { color: Colors.textOnPrimary, fontSize: 28, fontWeight: '300', marginTop: -2 },
 });

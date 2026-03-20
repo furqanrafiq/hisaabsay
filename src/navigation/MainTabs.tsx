@@ -12,10 +12,10 @@ import { Colors } from '@/constants/colors';
 const Tab = createBottomTabNavigator();
 
 const icons: Record<string, string> = {
-  Home: 'home',
+  Home: 'home-variant',
   Transactions: 'swap-horizontal',
-  Budget: 'chart-pie',
-  Goals: 'flag',
+  Budget: 'chart-donut',
+  Goals: 'flag-variant',
   Profile: 'account',
 };
 
@@ -30,10 +30,21 @@ export function MainTabs() {
         tabBarInactiveTintColor: Colors.tabBarInactive,
         tabBarStyle: {
           backgroundColor: Colors.tabBar,
-          borderTopWidth: 1,
-          borderTopColor: Colors.border,
-          height: 60,
-          paddingBottom: 8,
+          borderTopWidth: 0,
+          height: 68,
+          paddingBottom: 12,
+          paddingTop: 6,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -1 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          letterSpacing: 0.2,
+          marginTop: 2,
         },
         headerShown: false,
       })}

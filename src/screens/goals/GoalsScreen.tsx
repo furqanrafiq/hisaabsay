@@ -44,7 +44,7 @@ export function GoalsScreen() {
           return (
             <AppCard style={styles.goalCard}>
               <View style={styles.goalHeader}>
-                <Text style={styles.goalEmoji}>{goal.emoji}</Text>
+                <View style={styles.goalEmojiWrap}><Text style={styles.goalEmoji}>{goal.emoji}</Text></View>
                 <View style={styles.goalInfo}>
                   <Text style={styles.goalName}>{goal.name}</Text>
                   <Text style={styles.goalTarget}>Target: {formatCurrency(goal.targetAmount, currency)}</Text>
@@ -77,17 +77,18 @@ const styles = StyleSheet.create({
   list: { padding: Theme.spacing.md, paddingBottom: 100 },
   goalCard: { marginBottom: Theme.spacing.md, padding: Theme.spacing.lg },
   goalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Theme.spacing.md },
-  goalEmoji: { fontSize: 32, marginRight: Theme.spacing.sm },
+  goalEmojiWrap: { width: 52, height: 52, borderRadius: 14, backgroundColor: Colors.cardSubtle, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.sm },
+  goalEmoji: { fontSize: 28 },
   goalInfo: { flex: 1 },
-  goalName: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary },
-  goalTarget: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, marginTop: 2 },
-  deleteBtn: { padding: 4 },
-  deleteText: { color: Colors.textSecondary, fontSize: Theme.fontSize.md },
+  goalName: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.2 },
+  goalTarget: { fontSize: Theme.fontSize.sm, color: Colors.textTertiary, marginTop: 3 },
+  deleteBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.cardSubtle, alignItems: 'center', justifyContent: 'center' },
+  deleteText: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600' },
   progressRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Theme.spacing.sm },
-  saved: { fontSize: Theme.fontSize.lg, fontWeight: '600', color: Colors.primary },
-  pct: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textSecondary },
-  addFundsBtn: { marginTop: Theme.spacing.md, height: 40, borderRadius: Theme.radius.full, backgroundColor: Colors.cardMint, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.primary },
-  addFundsText: { color: Colors.primary, fontSize: Theme.fontSize.sm, fontWeight: '600' },
-  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.card },
+  saved: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: Colors.primary, letterSpacing: -0.4 },
+  pct: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.primaryLight },
+  addFundsBtn: { marginTop: Theme.spacing.md, height: 42, borderRadius: Theme.radius.full, backgroundColor: Colors.primaryMuted, alignItems: 'center', justifyContent: 'center' },
+  addFundsText: { color: Colors.primary, fontSize: Theme.fontSize.sm, fontWeight: '700' },
+  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
   fabText: { color: Colors.textOnPrimary, fontSize: 28, fontWeight: '300', marginTop: -2 },
 });

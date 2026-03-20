@@ -20,7 +20,9 @@ export function AppCard({ children, style, color }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.card,
-    borderRadius: Theme.radius.xl,
+    borderRadius: Theme.radius.lg,
     padding: Theme.spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
 });

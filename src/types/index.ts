@@ -7,6 +7,8 @@ export interface Transaction {
   category: string;
   note: string;
   date: string;
+  fixed?: boolean;
+  overspendReason?: string;
   createdAt: string;
 }
 
@@ -24,6 +26,7 @@ export interface Goal {
   savedAmount: number;
   deadline: string;
   emoji: string;
+  monthlyContribution?: number;
   createdAt: string;
 }
 

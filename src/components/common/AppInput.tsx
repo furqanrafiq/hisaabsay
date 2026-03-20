@@ -27,18 +27,25 @@ export function AppInput({ label, error, style, ...props }: Props) {
 
 const styles = StyleSheet.create({
   wrapper: { marginBottom: Theme.spacing.md },
-  label: { fontSize: Theme.fontSize.sm, fontWeight: '500', color: Colors.textSecondary, marginBottom: 6 },
+  label: {
+    fontSize: Theme.fontSize.xs,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 8,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
   input: {
     height: 52,
-    backgroundColor: Colors.cardMint,
+    backgroundColor: Colors.cardSubtle,
     borderRadius: Theme.radius.md,
     paddingHorizontal: Theme.spacing.md,
     fontSize: Theme.fontSize.md,
     color: Colors.textPrimary,
     borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderColor: Colors.border,
   },
-  focused: { borderColor: Colors.primary, backgroundColor: Colors.card },
+  focused: { borderColor: Colors.primary, backgroundColor: Colors.card, ...Theme.shadow.card },
   errored: { borderColor: Colors.error },
-  error: { fontSize: Theme.fontSize.xs, color: Colors.error, marginTop: 4 },
+  error: { fontSize: Theme.fontSize.xs, color: Colors.error, marginTop: 5, fontWeight: '500' },
 });

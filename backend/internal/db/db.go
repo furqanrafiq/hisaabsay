@@ -100,6 +100,19 @@ func (d *DB) migrate(ctx context.Context) error {
 			return err
 		}
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Add new columns to existing tables — ignore errors (column may already exist)
+	alterStmts := []string{
+		`ALTER TABLE transactions ADD COLUMN fixed INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE transactions ADD COLUMN overspend_reason TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE goals ADD COLUMN monthly_contribution REAL NOT NULL DEFAULT 0`,
+	}
+	for _, s := range alterStmts {
+		_, _ = d.SQL.ExecContext(ctx, s)
+	}
+	return nil
 }
 

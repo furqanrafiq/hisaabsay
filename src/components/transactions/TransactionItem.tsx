@@ -24,7 +24,10 @@ export function TransactionItem({ item, currency, onPress, extraCategories = [] 
         <MaterialCommunityIcons name={cat.icon as any} size={22} color={cat.color} />
       </View>
       <View style={styles.info}>
-        <Text style={styles.catName}>{cat.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.catName}>{cat.name}</Text>
+          {item.fixed && <View style={styles.fixedBadge}><Text style={styles.fixedBadgeText}>Fixed</Text></View>}
+        </View>
         <Text style={styles.note} numberOfLines={1}>{item.note || formatShortDate(item.date)}</Text>
       </View>
       <Text style={[styles.amount, { color: item.type === 'income' ? Colors.income : Colors.expense }]}>
@@ -35,10 +38,13 @@ export function TransactionItem({ item, currency, onPress, extraCategories = [] 
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: Theme.spacing.sm },
-  iconWrap: { width: 44, height: 44, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.sm },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.divider },
+  iconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.md },
   info: { flex: 1 },
-  catName: { fontSize: Theme.fontSize.md, fontWeight: '500', color: Colors.textPrimary },
-  note: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, marginTop: 2 },
-  amount: { fontSize: Theme.fontSize.md, fontWeight: '600' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  catName: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary },
+  fixedBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: Theme.radius.full, backgroundColor: Colors.primaryMuted },
+  fixedBadgeText: { fontSize: 9, fontWeight: '700', color: Colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' },
+  note: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 3 },
+  amount: { fontSize: Theme.fontSize.md, fontWeight: '700', letterSpacing: -0.3 },
 });

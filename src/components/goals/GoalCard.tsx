@@ -13,7 +13,7 @@ export function GoalCard({ goal, currency }: Props) {
   const pct = goal.targetAmount > 0 ? Math.round((goal.savedAmount / goal.targetAmount) * 100) : 0;
   return (
     <AppCard style={styles.card}>
-      <Text style={styles.emoji}>{goal.emoji}</Text>
+      <View style={styles.emojiWrap}><Text style={styles.emoji}>{goal.emoji}</Text></View>
       <Text style={styles.name} numberOfLines={1}>{goal.name}</Text>
       <Text style={styles.saved}>{formatCurrency(goal.savedAmount, currency)}</Text>
       <Text style={styles.target}>of {formatCurrency(goal.targetAmount, currency)}</Text>
@@ -26,10 +26,11 @@ export function GoalCard({ goal, currency }: Props) {
 }
 
 const styles = StyleSheet.create({
-  card: { width: 150, marginRight: Theme.spacing.sm },
-  emoji: { fontSize: 28, marginBottom: 4 },
-  name: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textPrimary },
-  saved: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.primary, marginTop: 4 },
-  target: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary },
-  pct: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, marginTop: 4, textAlign: 'right' },
+  card: { width: 160, marginRight: Theme.spacing.md },
+  emojiWrap: { width: 48, height: 48, borderRadius: 12, backgroundColor: Colors.cardSubtle, alignItems: 'center', justifyContent: 'center', marginBottom: Theme.spacing.sm },
+  emoji: { fontSize: 26 },
+  name: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textPrimary },
+  saved: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: Colors.primary, marginTop: 6, letterSpacing: -0.3 },
+  target: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary },
+  pct: { fontSize: Theme.fontSize.xs, color: Colors.primaryLight, fontWeight: '600', marginTop: 6, textAlign: 'right' },
 });

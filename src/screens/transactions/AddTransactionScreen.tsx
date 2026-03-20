@@ -9,29 +9,67 @@ import { Theme } from '@/constants/theme';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { formatCurrency } from '@/utils/formatCurrency';
+import { getMonthKey } from '@/utils/formatDate';
 import { format } from 'date-fns';
 
 export function AddTransactionScreen() {
   const navigation = useNavigation<any>();
-  const { addTransaction, customCategories } = useFinance();
+  const { addTransaction, customCategories, budgets, transactions } = useFinance();
   const { user } = useAuth();
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('food');
   const [note, setNote] = useState('');
+  const [fixed, setFixed] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const defaultCats = CATEGORIES.filter((c) => c.type === type || c.type === 'both');
   const customCats = customCategories.filter((c) => c.type === type || c.type === 'both');
   const allCats = [...defaultCats, ...customCats];
 
+  const doAdd = async (overspendReason?: string) => {
+    const amt = parseFloat(amount);
+    setLoading(true);
+    await addTransaction({
+      type, amount: amt, category, note,
+      date: format(new Date(), 'yyyy-MM-dd'),
+      fixed,
+      overspendReason: overspendReason ?? '',
+    });
+    setLoading(false);
+    navigation.goBack();
+  };
+
   const handleAdd = async () => {
     const amt = parseFloat(amount);
     if (!amount || isNaN(amt) || amt <= 0) { Alert.alert('Invalid amount'); return; }
-    setLoading(true);
-    await addTransaction({ type, amount: amt, category, note, date: format(new Date(), 'yyyy-MM-dd') });
-    setLoading(false);
-    navigation.goBack();
+
+    if (type === 'expense') {
+      const monthKey = getMonthKey(new Date());
+      const budget = budgets.find((b) => b.category === category && b.month === monthKey);
+      if (budget) {
+        const spent = transactions
+          .filter((t) => t.type === 'expense' && t.category === category && t.date.startsWith(monthKey))
+          .reduce((s, t) => s + t.amount, 0);
+        if (spent + amt > budget.limit) {
+          const overBy = formatCurrency(spent + amt - budget.limit, user?.currency ?? 'PKR');
+          Alert.prompt(
+            'Over Budget!',
+            `This exceeds your budget for this category by ${overBy}. Please give a reason:`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Add Anyway', onPress: (reason) => doAdd(reason || '') },
+            ],
+            'plain-text',
+            '',
+          );
+          return;
+        }
+      }
+    }
+
+    await doAdd();
   };
 
   return (
@@ -60,6 +98,27 @@ export function AddTransactionScreen() {
 
         <AppInput label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder={`0.00 ${user?.currency ?? 'PKR'}`} />
         <AppInput label="Note (optional)" value={note} onChangeText={setNote} placeholder="What was this for?" />
+
+        {/* Fixed / Variable toggle */}
+        <Text style={styles.sectionLabel}>Type</Text>
+        <View style={styles.fixedRow}>
+          {([false, true] as const).map((val) => (
+            <TouchableOpacity
+              key={String(val)}
+              style={[styles.fixedBtn, fixed === val && styles.fixedBtnActive]}
+              onPress={() => setFixed(val)}
+            >
+              <MaterialCommunityIcons
+                name={val ? 'lock-outline' : 'refresh'}
+                size={14}
+                color={fixed === val ? Colors.textOnPrimary : Colors.textSecondary}
+              />
+              <Text style={[styles.fixedBtnText, fixed === val && styles.fixedBtnTextActive]}>
+                {val ? 'Fixed' : 'Variable'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <View style={styles.catHeader}>
           <Text style={styles.sectionLabel}>Category</Text>
@@ -96,23 +155,28 @@ export function AddTransactionScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Theme.spacing.md, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  cancel: { fontSize: Theme.fontSize.md, color: Colors.primary },
-  title: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary },
+  cancel: { fontSize: Theme.fontSize.md, color: Colors.primaryLight, fontWeight: '600' },
+  title: { fontSize: Theme.fontSize.lg, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
   scroll: { flex: 1 },
   content: { padding: Theme.spacing.lg, paddingBottom: 40 },
-  typeRow: { flexDirection: 'row', marginBottom: Theme.spacing.lg, backgroundColor: Colors.card, borderRadius: Theme.radius.full, padding: 4 },
-  typeBtn: { flex: 1, height: 40, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center' },
+  typeRow: { flexDirection: 'row', marginBottom: Theme.spacing.lg, backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 4 },
+  typeBtn: { flex: 1, height: 42, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center' },
   typeBtnExpense: { backgroundColor: Colors.expense },
   typeBtnIncome: { backgroundColor: Colors.income },
-  typeBtnText: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  typeBtnText: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textSecondary },
   typeBtnTextActive: { color: Colors.textOnPrimary },
+  sectionLabel: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Theme.spacing.sm },
+  fixedRow: { flexDirection: 'row', gap: 8, marginBottom: Theme.spacing.lg, backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 4 },
+  fixedBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: Theme.radius.full },
+  fixedBtnActive: { backgroundColor: Colors.primary },
+  fixedBtnText: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  fixedBtnTextActive: { color: Colors.textOnPrimary },
   catHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Theme.spacing.sm },
-  sectionLabel: { fontSize: Theme.fontSize.sm, fontWeight: '500', color: Colors.textSecondary },
-  addCatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: Colors.cardMint, borderRadius: Theme.radius.full, borderWidth: 1, borderColor: Colors.primary },
-  addCatText: { fontSize: Theme.fontSize.xs, color: Colors.primary, fontWeight: '600' },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catItem: { width: '30%', alignItems: 'center', padding: Theme.spacing.sm, borderRadius: Theme.radius.md, backgroundColor: Colors.card, borderWidth: 2, borderColor: 'transparent' },
-  catItemActive: { borderColor: Colors.primary, backgroundColor: Colors.cardMint },
-  catIcon: { width: 40, height: 40, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  catLabel: { fontSize: Theme.fontSize.xs, color: Colors.textPrimary, textAlign: 'center' },
+  addCatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: Colors.primaryMuted, borderRadius: Theme.radius.full },
+  addCatText: { fontSize: Theme.fontSize.xs, color: Colors.primary, fontWeight: '700' },
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  catItem: { width: '30%', alignItems: 'center', padding: Theme.spacing.sm, borderRadius: Theme.radius.md, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border },
+  catItemActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
+  catIcon: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  catLabel: { fontSize: Theme.fontSize.xs, color: Colors.textPrimary, textAlign: 'center', fontWeight: '600' },
 });

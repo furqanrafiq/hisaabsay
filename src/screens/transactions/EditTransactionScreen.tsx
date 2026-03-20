@@ -21,6 +21,7 @@ export function EditTransactionScreen() {
   const [amount, setAmount] = useState(String(t.amount));
   const [category, setCategory] = useState(t.category);
   const [note, setNote] = useState(t.note);
+  const [fixed, setFixed] = useState(t.fixed ?? false);
   const [loading, setLoading] = useState(false);
 
   const defaultCats = CATEGORIES.filter((c) => c.type === t.type || c.type === 'both');
@@ -31,7 +32,7 @@ export function EditTransactionScreen() {
     const amt = parseFloat(amount);
     if (!amount || isNaN(amt) || amt <= 0) { Alert.alert('Invalid amount'); return; }
     setLoading(true);
-    await editTransaction(t.id, { amount: amt, category, note });
+    await editTransaction(t.id, { amount: amt, category, note, fixed });
     setLoading(false);
     navigation.goBack();
   };
@@ -58,6 +59,28 @@ export function EditTransactionScreen() {
         </View>
         <AppInput label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder={`0.00 ${user?.currency ?? 'PKR'}`} />
         <AppInput label="Note" value={note} onChangeText={setNote} placeholder="What was this for?" />
+
+        {/* Fixed / Variable toggle */}
+        <Text style={styles.sectionLabel}>Type</Text>
+        <View style={styles.fixedRow}>
+          {([false, true] as const).map((val) => (
+            <TouchableOpacity
+              key={String(val)}
+              style={[styles.fixedBtn, fixed === val && styles.fixedBtnActive]}
+              onPress={() => setFixed(val)}
+            >
+              <MaterialCommunityIcons
+                name={val ? 'lock-outline' : 'refresh'}
+                size={14}
+                color={fixed === val ? Colors.textOnPrimary : Colors.textSecondary}
+              />
+              <Text style={[styles.fixedBtnText, fixed === val && styles.fixedBtnTextActive]}>
+                {val ? 'Fixed' : 'Variable'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <Text style={styles.sectionLabel}>Category</Text>
         <View style={styles.catGrid}>
           {cats.map((c) => (
@@ -78,16 +101,21 @@ export function EditTransactionScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Theme.spacing.md, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  cancel: { fontSize: Theme.fontSize.md, color: Colors.primary },
+  cancel: { fontSize: Theme.fontSize.md, color: Colors.primaryLight, fontWeight: '600' },
   title: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary },
   deleteBtn: { fontSize: Theme.fontSize.md, color: Colors.expense },
   typeBadge: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: Theme.radius.full, marginBottom: Theme.spacing.md },
   scroll: { flex: 1 },
   content: { padding: Theme.spacing.lg, paddingBottom: 40 },
-  sectionLabel: { fontSize: Theme.fontSize.sm, fontWeight: '500', color: Colors.textSecondary, marginBottom: Theme.spacing.sm },
+  sectionLabel: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Theme.spacing.sm },
+  fixedRow: { flexDirection: 'row', gap: 8, marginBottom: Theme.spacing.lg, backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 4 },
+  fixedBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: Theme.radius.full },
+  fixedBtnActive: { backgroundColor: Colors.primary },
+  fixedBtnText: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  fixedBtnTextActive: { color: Colors.textOnPrimary },
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catItem: { width: '30%', alignItems: 'center', padding: Theme.spacing.sm, borderRadius: Theme.radius.md, backgroundColor: Colors.card, borderWidth: 2, borderColor: 'transparent' },
-  catItemActive: { borderColor: Colors.primary, backgroundColor: Colors.cardMint },
+  catItem: { width: '30%', alignItems: 'center', padding: Theme.spacing.sm, borderRadius: Theme.radius.md, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border },
+  catItemActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
   catIcon: { width: 40, height: 40, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   catLabel: { fontSize: Theme.fontSize.xs, color: Colors.textPrimary, textAlign: 'center' },
 });

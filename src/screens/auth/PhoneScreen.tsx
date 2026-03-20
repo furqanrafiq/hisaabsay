@@ -35,7 +35,9 @@ export function PhoneScreen({ navigation }: Props) {
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.logoArea}>
-          <Text style={styles.logo}>💰</Text>
+          <View style={styles.logoBox}>
+            <Text style={styles.logo}>💰</Text>
+          </View>
           <Text style={styles.appName}>HisaabSay</Text>
           <Text style={styles.tagline}>Your personal finance companion</Text>
         </View>
@@ -59,12 +61,13 @@ export function PhoneScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
-  container: { flexGrow: 1, padding: Theme.spacing.lg, justifyContent: 'center' },
-  logoArea: { alignItems: 'center', marginBottom: Theme.spacing.xxl },
-  logo: { fontSize: 64 },
-  appName: { fontSize: Theme.fontSize.xxl, fontWeight: '700', color: Colors.primary, marginTop: Theme.spacing.sm },
-  tagline: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, marginTop: 4 },
-  form: { backgroundColor: Colors.card, borderRadius: Theme.radius.xl, padding: Theme.spacing.lg, ...Theme.shadow.card },
-  heading: { fontSize: Theme.fontSize.xl, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
-  sub: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, marginBottom: Theme.spacing.lg },
+  container: { flexGrow: 1, padding: Theme.spacing.xl, justifyContent: 'center' },
+  logoArea: { alignItems: 'center', marginBottom: Theme.spacing.xl },
+  logoBox: { width: 72, height: 72, borderRadius: 20, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
+  logo: { fontSize: 36 },
+  appName: { fontSize: 28, fontWeight: '800', color: Colors.primary, marginTop: Theme.spacing.md, letterSpacing: -0.5 },
+  tagline: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, marginTop: 6, letterSpacing: 0.2 },
+  form: { backgroundColor: Colors.card, borderRadius: Theme.radius.xl, padding: Theme.spacing.lg, ...Theme.shadow.elevated, borderWidth: 1, borderColor: Colors.border },
+  heading: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4, letterSpacing: -0.4 },
+  sub: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, marginBottom: Theme.spacing.lg, lineHeight: 20 },
 });

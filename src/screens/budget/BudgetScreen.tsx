@@ -19,13 +19,14 @@ import { addMonths, subMonths } from 'date-fns';
 export function BudgetScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { budgets, transactions, deleteBudget } = useFinance();
+  const { budgets, transactions, goals, deleteBudget } = useFinance();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const currency = user?.currency ?? 'PKR';
   const monthKey = getMonthKey(currentMonth);
   const usage = getBudgetUsage(transactions, budgets, monthKey);
   const totalLimit = usage.reduce((s, b) => s + b.limit, 0);
   const totalSpent = usage.reduce((s, b) => s + b.spent, 0);
+  const goalSavings = goals.reduce((s, g) => s + (g.monthlyContribution ?? 0), 0);
 
   const handleDelete = (id: string, categoryId: string) => {
     const cat = getCategoryById(categoryId);
@@ -47,13 +48,19 @@ export function BudgetScreen() {
         </TouchableOpacity>
       </View>
 
-      {usage.length > 0 && (
+      {(usage.length > 0 || goalSavings > 0) && (
         <AppCard style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Total Budget</Text>
           <Text style={styles.summaryAmount}>
             {formatCurrency(totalSpent, currency)}
             <Text style={styles.summaryOf}> / {formatCurrency(totalLimit, currency)}</Text>
           </Text>
+          {goalSavings > 0 && (
+            <View style={styles.goalRow}>
+              <Text style={styles.goalLabel}>Goal Commitments</Text>
+              <Text style={styles.goalAmount}>−{formatCurrency(goalSavings, currency)}</Text>
+            </View>
+          )}
         </AppCard>
       )}
 
@@ -104,21 +111,24 @@ export function BudgetScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Theme.spacing.lg, paddingVertical: Theme.spacing.sm, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Theme.spacing.lg, paddingVertical: Theme.spacing.md, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
   monthBtn: { padding: Theme.spacing.sm },
-  monthArrow: { fontSize: 24, color: Colors.primary, fontWeight: '500' },
-  monthLabel: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary },
-  summaryCard: { margin: Theme.spacing.md, marginBottom: 0 },
-  summaryLabel: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary },
-  summaryAmount: { fontSize: Theme.fontSize.xl, fontWeight: '700', color: Colors.textPrimary, marginTop: 4 },
+  monthArrow: { fontSize: 26, color: Colors.primary },
+  monthLabel: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.2 },
+  summaryCard: { margin: Theme.spacing.md, marginBottom: 0, backgroundColor: Colors.cardAccent },
+  summaryLabel: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
+  summaryAmount: { fontSize: Theme.fontSize.xxl, fontWeight: '800', color: Colors.textPrimary, marginTop: 6, letterSpacing: -0.5 },
   summaryOf: { fontSize: Theme.fontSize.md, fontWeight: '400', color: Colors.textSecondary },
+  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Theme.spacing.sm, paddingTop: Theme.spacing.sm, borderTopWidth: 1, borderTopColor: Colors.divider },
+  goalLabel: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' },
+  goalAmount: { fontSize: Theme.fontSize.md, fontWeight: '700', color: Colors.warning },
   list: { padding: Theme.spacing.md, paddingBottom: 100 },
   budgetCard: { marginBottom: Theme.spacing.sm },
-  actions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.border, marginTop: Theme.spacing.sm, paddingTop: Theme.spacing.sm },
+  actions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.divider, marginTop: Theme.spacing.sm, paddingTop: Theme.spacing.sm },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 4 },
-  divider: { width: 1, backgroundColor: Colors.border },
-  actionEdit: { fontSize: Theme.fontSize.sm, color: Colors.primary, fontWeight: '500' },
-  actionDelete: { fontSize: Theme.fontSize.sm, color: Colors.expense, fontWeight: '500' },
-  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  divider: { width: 1, backgroundColor: Colors.divider },
+  actionEdit: { fontSize: Theme.fontSize.sm, color: Colors.primary, fontWeight: '600' },
+  actionDelete: { fontSize: Theme.fontSize.sm, color: Colors.expense, fontWeight: '600' },
+  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
   fabText: { color: '#FFFFFF', fontSize: 28, fontWeight: '300', marginTop: -2 },
 });

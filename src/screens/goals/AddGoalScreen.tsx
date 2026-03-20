@@ -14,6 +14,7 @@ export function AddGoalScreen() {
   const { addGoal } = useFinance();
   const [name, setName] = useState('');
   const [target, setTarget] = useState('');
+  const [monthly, setMonthly] = useState('');
   const [emoji, setEmoji] = useState('🎯');
   const [loading, setLoading] = useState(false);
 
@@ -21,8 +22,16 @@ export function AddGoalScreen() {
     if (!name.trim()) { Alert.alert('Enter a goal name'); return; }
     const amt = parseFloat(target);
     if (!target || isNaN(amt) || amt <= 0) { Alert.alert('Enter a valid target amount'); return; }
+    const monthlyAmt = monthly ? parseFloat(monthly) : 0;
     setLoading(true);
-    await addGoal({ name: name.trim(), targetAmount: amt, savedAmount: 0, deadline: '', emoji });
+    await addGoal({
+      name: name.trim(),
+      targetAmount: amt,
+      savedAmount: 0,
+      deadline: '',
+      emoji,
+      monthlyContribution: isNaN(monthlyAmt) ? 0 : monthlyAmt,
+    });
     setLoading(false);
     navigation.goBack();
   };
@@ -37,6 +46,7 @@ export function AddGoalScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <AppInput label="Goal Name" value={name} onChangeText={setName} placeholder="e.g. Emergency Fund" />
         <AppInput label="Target Amount" value={target} onChangeText={setTarget} keyboardType="decimal-pad" placeholder="0.00" />
+        <AppInput label="Monthly Contribution (optional)" value={monthly} onChangeText={setMonthly} keyboardType="decimal-pad" placeholder="0.00" />
         <Text style={styles.sectionLabel}>Choose Emoji</Text>
         <View style={styles.emojiGrid}>
           {EMOJIS.map((e) => (
@@ -54,12 +64,12 @@ export function AddGoalScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Theme.spacing.md, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  cancel: { fontSize: Theme.fontSize.md, color: Colors.primary },
+  cancel: { fontSize: Theme.fontSize.md, color: Colors.primaryLight, fontWeight: '600' },
   title: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary },
   content: { padding: Theme.spacing.lg, paddingBottom: 40 },
-  sectionLabel: { fontSize: Theme.fontSize.sm, fontWeight: '500', color: Colors.textSecondary, marginBottom: Theme.spacing.sm },
+  sectionLabel: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Theme.spacing.sm },
   emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   emojiBtn: { width: 52, height: 52, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderWidth: 2, borderColor: 'transparent' },
-  emojiBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.cardMint },
+  emojiBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
   emojiText: { fontSize: 24 },
 });

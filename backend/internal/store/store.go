@@ -99,7 +99,7 @@ func (s *Store) UpsertProfile(ctx context.Context, userID string, p model.UserPr
 
 func (s *Store) ListTransactions(ctx context.Context, userID string) ([]model.Transaction, error) {
 	rows, err := s.DB.SQL.QueryContext(ctx,
-		`SELECT id, type, amount, category, note, date, created_at
+		`SELECT id, type, amount, category, note, date, fixed, overspend_reason, created_at
 		 FROM transactions WHERE user_id = ? ORDER BY created_at DESC`,
 		userID,
 	)
@@ -111,9 +111,11 @@ func (s *Store) ListTransactions(ctx context.Context, userID string) ([]model.Tr
 	var out []model.Transaction
 	for rows.Next() {
 		var t model.Transaction
-		if err := rows.Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &t.CreatedAt); err != nil {
+		var fixed int
+		if err := rows.Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &fixed, &t.OverspendReason, &t.CreatedAt); err != nil {
 			return nil, err
 		}
+		t.Fixed = fixed != 0
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -127,9 +129,9 @@ func (s *Store) CreateTransaction(ctx context.Context, userID string, t model.Tr
 		t.CreatedAt = nowRFC3339()
 	}
 	_, err := s.DB.SQL.ExecContext(ctx,
-		`INSERT INTO transactions (id, user_id, type, amount, category, note, date, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, userID, string(t.Type), t.Amount, t.Category, t.Note, t.Date, t.CreatedAt,
+		`INSERT INTO transactions (id, user_id, type, amount, category, note, date, fixed, overspend_reason, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, userID, string(t.Type), t.Amount, t.Category, t.Note, t.Date, boolToInt(t.Fixed), t.OverspendReason, t.CreatedAt,
 	)
 	if err != nil {
 		return model.Transaction{}, err
@@ -157,9 +159,15 @@ func (s *Store) UpdateTransaction(ctx context.Context, userID, id string, patch 
 	if v, ok := patch["date"].(string); ok {
 		cur.Date = v
 	}
+	if v, ok := patch["fixed"].(bool); ok {
+		cur.Fixed = v
+	}
+	if v, ok := patch["overspendReason"].(string); ok {
+		cur.OverspendReason = v
+	}
 	_, err = s.DB.SQL.ExecContext(ctx,
-		`UPDATE transactions SET type=?, amount=?, category=?, note=?, date=? WHERE user_id=? AND id=?`,
-		string(cur.Type), cur.Amount, cur.Category, cur.Note, cur.Date, userID, id,
+		`UPDATE transactions SET type=?, amount=?, category=?, note=?, date=?, fixed=?, overspend_reason=? WHERE user_id=? AND id=?`,
+		string(cur.Type), cur.Amount, cur.Category, cur.Note, cur.Date, boolToInt(cur.Fixed), cur.OverspendReason, userID, id,
 	)
 	if err != nil {
 		return model.Transaction{}, err
@@ -169,17 +177,19 @@ func (s *Store) UpdateTransaction(ctx context.Context, userID, id string, patch 
 
 func (s *Store) GetTransaction(ctx context.Context, userID, txID string) (model.Transaction, error) {
 	var t model.Transaction
+	var fixed int
 	err := s.DB.SQL.QueryRowContext(ctx,
-		`SELECT id, type, amount, category, note, date, created_at
+		`SELECT id, type, amount, category, note, date, fixed, overspend_reason, created_at
 		 FROM transactions WHERE user_id = ? AND id = ?`,
 		userID, txID,
-	).Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &t.CreatedAt)
+	).Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &fixed, &t.OverspendReason, &t.CreatedAt)
 	if err == sql.ErrNoRows {
 		return model.Transaction{}, ErrNotFound
 	}
 	if err != nil {
 		return model.Transaction{}, err
 	}
+	t.Fixed = fixed != 0
 	return t, nil
 }
 
@@ -287,7 +297,7 @@ func (s *Store) DeleteBudget(ctx context.Context, userID, budgetID string) error
 
 func (s *Store) ListGoals(ctx context.Context, userID string) ([]model.Goal, error) {
 	rows, err := s.DB.SQL.QueryContext(ctx,
-		`SELECT id, name, target_amount, saved_amount, deadline, emoji, created_at
+		`SELECT id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, created_at
 		 FROM goals WHERE user_id = ? ORDER BY created_at DESC`,
 		userID,
 	)
@@ -299,7 +309,7 @@ func (s *Store) ListGoals(ctx context.Context, userID string) ([]model.Goal, err
 	var out []model.Goal
 	for rows.Next() {
 		var g model.Goal
-		if err := rows.Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.MonthlyContribution, &g.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -315,9 +325,9 @@ func (s *Store) CreateGoal(ctx context.Context, userID string, g model.Goal) (mo
 		g.CreatedAt = nowRFC3339()
 	}
 	_, err := s.DB.SQL.ExecContext(ctx,
-		`INSERT INTO goals (id, user_id, name, target_amount, saved_amount, deadline, emoji, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		g.ID, userID, g.Name, g.TargetAmount, g.SavedAmount, g.Deadline, g.Emoji, g.CreatedAt,
+		`INSERT INTO goals (id, user_id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		g.ID, userID, g.Name, g.TargetAmount, g.SavedAmount, g.Deadline, g.Emoji, g.MonthlyContribution, g.CreatedAt,
 	)
 	if err != nil {
 		return model.Goal{}, err
@@ -328,10 +338,10 @@ func (s *Store) CreateGoal(ctx context.Context, userID string, g model.Goal) (mo
 func (s *Store) GetGoal(ctx context.Context, userID, goalID string) (model.Goal, error) {
 	var g model.Goal
 	err := s.DB.SQL.QueryRowContext(ctx,
-		`SELECT id, name, target_amount, saved_amount, deadline, emoji, created_at
+		`SELECT id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, created_at
 		 FROM goals WHERE user_id = ? AND id = ?`,
 		userID, goalID,
-	).Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.CreatedAt)
+	).Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.MonthlyContribution, &g.CreatedAt)
 	if err == sql.ErrNoRows {
 		return model.Goal{}, ErrNotFound
 	}
@@ -361,9 +371,12 @@ func (s *Store) UpdateGoal(ctx context.Context, userID, goalID string, patch map
 	if v, ok := patch["emoji"].(string); ok {
 		cur.Emoji = v
 	}
+	if v, ok := patch["monthlyContribution"].(float64); ok {
+		cur.MonthlyContribution = v
+	}
 	_, err = s.DB.SQL.ExecContext(ctx,
-		`UPDATE goals SET name=?, target_amount=?, saved_amount=?, deadline=?, emoji=? WHERE user_id=? AND id=?`,
-		cur.Name, cur.TargetAmount, cur.SavedAmount, cur.Deadline, cur.Emoji, userID, goalID,
+		`UPDATE goals SET name=?, target_amount=?, saved_amount=?, deadline=?, emoji=?, monthly_contribution=? WHERE user_id=? AND id=?`,
+		cur.Name, cur.TargetAmount, cur.SavedAmount, cur.Deadline, cur.Emoji, cur.MonthlyContribution, userID, goalID,
 	)
 	if err != nil {
 		return model.Goal{}, err
