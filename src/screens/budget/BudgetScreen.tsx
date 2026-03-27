@@ -6,27 +6,35 @@ import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
-import { AppCard } from '@/components/common/AppCard';
 import { BudgetCategoryRow } from '@/components/budget/BudgetCategoryRow';
 import { EmptyState } from '@/components/common/EmptyState';
+import { DonutChart, DonutSlice } from '@/components/common/DonutChart';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getBudgetUsage } from '@/utils/calculations';
 import { getMonthKey, formatMonthYear } from '@/utils/formatDate';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getCategoryById } from '@/constants/categories';
 import { addMonths, subMonths } from 'date-fns';
 
 export function BudgetScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { budgets, transactions, goals, deleteBudget } = useFinance();
+  const { budgets, transactions, deleteBudget } = useFinance();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const currency = user?.currency ?? 'PKR';
   const monthKey = getMonthKey(currentMonth);
   const usage = getBudgetUsage(transactions, budgets, monthKey);
   const totalLimit = usage.reduce((s, b) => s + b.limit, 0);
   const totalSpent = usage.reduce((s, b) => s + b.spent, 0);
-  const goalSavings = goals.reduce((s, g) => s + (g.monthlyContribution ?? 0), 0);
+  const usedPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0;
+  const remaining = totalLimit - totalSpent;
+
+  // Health score dots (1-10)
+  const healthScore = totalLimit > 0 ? Math.max(1, Math.round((1 - totalSpent / totalLimit) * 10)) : 10;
+
+  const donutSlices: DonutSlice[] = usage.map((b, i) => {
+    const cat = getCategoryById(b.category);
+    return { value: b.spent, color: Colors.chart[i % Colors.chart.length], label: cat.name };
+  });
 
   const handleDelete = (id: string, categoryId: string) => {
     const cat = getCategoryById(categoryId);
@@ -38,39 +46,71 @@ export function BudgetScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <View style={styles.monthRow}>
-        <TouchableOpacity onPress={() => setCurrentMonth((m) => subMonths(m, 1))} style={styles.monthBtn}>
-          <Text style={styles.monthArrow}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.monthLabel}>{formatMonthYear(currentMonth)}</Text>
-        <TouchableOpacity onPress={() => setCurrentMonth((m) => addMonths(m, 1))} style={styles.monthBtn}>
-          <Text style={styles.monthArrow}>›</Text>
-        </TouchableOpacity>
-      </View>
 
-      {(usage.length > 0 || goalSavings > 0) && (
-        <AppCard style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Total Budget</Text>
-          <Text style={styles.summaryAmount}>
-            {formatCurrency(totalSpent, currency)}
-            <Text style={styles.summaryOf}> / {formatCurrency(totalLimit, currency)}</Text>
-          </Text>
-          {goalSavings > 0 && (
-            <View style={styles.goalRow}>
-              <Text style={styles.goalLabel}>Goal Commitments</Text>
-              <Text style={styles.goalAmount}>−{formatCurrency(goalSavings, currency)}</Text>
-            </View>
-          )}
-        </AppCard>
-      )}
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Budget 📊</Text>
+          <Text style={styles.subtitle}>{formatMonthYear(currentMonth)}</Text>
+        </View>
+        <View style={styles.monthNav}>
+          <TouchableOpacity onPress={() => setCurrentMonth((m) => subMonths(m, 1))} style={styles.navBtn}>
+            <Text style={styles.navArrow}>‹</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCurrentMonth((m) => addMonths(m, 1))} style={styles.navBtn}>
+            <Text style={styles.navArrow}>›</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
       <FlatList
         data={usage}
         keyExtractor={(b) => b.id}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <>
+            {/* ── Summary Card ── */}
+            {usage.length > 0 && (
+              <View style={styles.summaryCard}>
+                <View style={styles.summaryLeft}>
+                  <DonutChart
+                    slices={donutSlices.length > 0 ? donutSlices : [{ value: 1, color: Colors.border, label: '' }]}
+                    size={110}
+                    thickness={18}
+                    centerLabel={`${usedPct}%`}
+                    centerSub="used"
+                  />
+                </View>
+                <View style={styles.summaryRight}>
+                  <Text style={styles.summaryTitle}>Monthly Budget</Text>
+                  <Text style={styles.summaryTotal}>{formatCurrency(totalLimit, currency)}</Text>
+                  <Text style={styles.summarySpent}>{formatCurrency(totalSpent, currency)} spent</Text>
+                  <Text style={[styles.summaryLeft2, { color: remaining >= 0 ? Colors.income : Colors.expense }]}>
+                    {formatCurrency(Math.abs(remaining), currency)} {remaining >= 0 ? 'left 💰' : 'over ⚠️'}
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* ── Health Score ── */}
+            {usage.length > 0 && (
+              <View style={styles.healthRow}>
+                <Text style={styles.healthLabel}>💡 Budget Health Score</Text>
+                <View style={styles.dots}>
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <View key={i} style={[styles.dot, i < healthScore ? styles.dotFilled : styles.dotEmpty]} />
+                  ))}
+                </View>
+                <Text style={styles.healthScore}>{healthScore}/10 {healthScore >= 7 ? 'Good' : healthScore >= 4 ? 'Fair' : 'Poor'}</Text>
+              </View>
+            )}
+
+            <Text style={styles.sectionTitle}>Category Breakdown</Text>
+          </>
+        }
         ListEmptyComponent={<EmptyState title="No budgets set" subtitle="Tap + to set category budgets" />}
         renderItem={({ item }) => (
-          <AppCard style={styles.budgetCard}>
+          <TouchableOpacity style={styles.budgetCard} onPress={() => navigation.navigate('BudgetDetail', { budget: item, monthKey })} activeOpacity={0.85}>
             <BudgetCategoryRow
               categoryId={item.category}
               limit={item.limit}
@@ -86,19 +126,17 @@ export function BudgetScreen() {
                   budget: { id: item.id, category: item.category, limit: item.limit },
                 })}
               >
-                <MaterialCommunityIcons name="pencil-outline" size={16} color={Colors.primary} />
-                <Text style={styles.actionEdit}>Edit</Text>
+                <Text style={styles.actionEdit}>✏️ Edit</Text>
               </TouchableOpacity>
               <View style={styles.divider} />
               <TouchableOpacity
                 style={styles.actionBtn}
                 onPress={() => handleDelete(item.id, item.category)}
               >
-                <MaterialCommunityIcons name="trash-can-outline" size={16} color={Colors.expense} />
-                <Text style={styles.actionDelete}>Delete</Text>
+                <Text style={styles.actionDelete}>🗑️ Delete</Text>
               </TouchableOpacity>
             </View>
-          </AppCard>
+          </TouchableOpacity>
         )}
       />
 
@@ -111,24 +149,46 @@ export function BudgetScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Theme.spacing.lg, paddingVertical: Theme.spacing.md, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  monthBtn: { padding: Theme.spacing.sm },
-  monthArrow: { fontSize: 26, color: Colors.primary },
-  monthLabel: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary, letterSpacing: -0.2 },
-  summaryCard: { margin: Theme.spacing.md, marginBottom: 0, backgroundColor: Colors.cardAccent },
-  summaryLabel: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase' },
-  summaryAmount: { fontSize: Theme.fontSize.xxl, fontWeight: '800', color: Colors.textPrimary, marginTop: 6, letterSpacing: -0.5 },
-  summaryOf: { fontSize: Theme.fontSize.md, fontWeight: '400', color: Colors.textSecondary },
-  goalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Theme.spacing.sm, paddingTop: Theme.spacing.sm, borderTopWidth: 1, borderTopColor: Colors.divider },
-  goalLabel: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' },
-  goalAmount: { fontSize: Theme.fontSize.md, fontWeight: '700', color: Colors.warning },
-  list: { padding: Theme.spacing.md, paddingBottom: 100 },
-  budgetCard: { marginBottom: Theme.spacing.sm },
-  actions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.divider, marginTop: Theme.spacing.sm, paddingTop: Theme.spacing.sm },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 4 },
+
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Theme.spacing.lg, paddingTop: Theme.spacing.md, paddingBottom: Theme.spacing.sm },
+  title: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
+  subtitle: { fontSize: Theme.fontSize.sm, color: Colors.textTertiary, marginTop: 2 },
+  monthNav: { flexDirection: 'row', gap: 4 },
+  navBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.card },
+  navArrow: { fontSize: 20, color: Colors.primary, fontWeight: '500', lineHeight: 22 },
+
+  // Summary Card
+  summaryCard: { flexDirection: 'row', backgroundColor: Colors.card, borderRadius: Theme.radius.lg, padding: Theme.spacing.md, marginBottom: Theme.spacing.md, ...Theme.shadow.card, alignItems: 'center' },
+  summaryLeft: { marginRight: Theme.spacing.md },
+  summaryRight: { flex: 1 },
+  summaryTitle: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, fontWeight: '500', marginBottom: 4 },
+  summaryTotal: { fontSize: Theme.fontSize.xxl, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.5, marginBottom: 2 },
+  summarySpent: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, marginBottom: 4 },
+  summaryLeft2: { fontSize: Theme.fontSize.sm, fontWeight: '700' },
+
+  // Health Score
+  healthRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, borderRadius: Theme.radius.lg, padding: Theme.spacing.md, marginBottom: Theme.spacing.md, gap: 10, ...Theme.shadow.card, flexWrap: 'wrap' },
+  healthLabel: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textPrimary },
+  dots: { flexDirection: 'row', gap: 4 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  dotFilled: { backgroundColor: Colors.primary },
+  dotEmpty: { backgroundColor: Colors.border },
+  healthScore: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.income },
+
+  sectionTitle: { fontSize: Theme.fontSize.lg, fontWeight: '700', color: Colors.textPrimary, marginBottom: Theme.spacing.sm },
+
+  // Budget Card
+  budgetCard: { backgroundColor: Colors.card, borderRadius: Theme.radius.lg, paddingHorizontal: Theme.spacing.md, marginBottom: Theme.spacing.sm, ...Theme.shadow.card },
+  actions: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.divider, paddingVertical: Theme.spacing.sm },
+  actionBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 },
   divider: { width: 1, backgroundColor: Colors.divider },
   actionEdit: { fontSize: Theme.fontSize.sm, color: Colors.primary, fontWeight: '600' },
   actionDelete: { fontSize: Theme.fontSize.sm, color: Colors.expense, fontWeight: '600' },
-  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
-  fabText: { color: '#FFFFFF', fontSize: 28, fontWeight: '300', marginTop: -2 },
+
+  list: { padding: Theme.spacing.lg, paddingBottom: 100 },
+
+  // FAB
+  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
+  fabText: { color: '#fff', fontSize: 28, fontWeight: '300', marginTop: -2 },
 });

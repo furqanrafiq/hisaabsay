@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity,
-  Alert, Modal, TextInput, StatusBar,
+  Alert, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/context/AuthContext';
@@ -9,9 +9,9 @@ import { useFinance } from '@/context/FinanceContext';
 import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
 import { CURRENCIES, formatCurrency } from '@/utils/formatCurrency';
-import { getCategoryById } from '@/constants/categories';
 import { getMonthKey, formatMonthYear } from '@/utils/formatDate';
-import { getMonthlyTotals } from '@/utils/calculations';
+import { getMonthlyTotals, getBudgetUsage } from '@/utils/calculations';
+import { getCategoryById } from '@/constants/categories';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -45,7 +45,7 @@ function SettingsRow({ emoji, label, subtitle, onPress, rightElement, showChevro
 
 export function ProfileScreen() {
   const { user, updateProfile, logout } = useAuth();
-  const { transactions, goals } = useFinance();
+  const { transactions, goals, budgets } = useFinance();
 
   const [name, setName] = useState(user?.name ?? '');
   const [currency, setCurrency] = useState(user?.currency ?? 'PKR');
@@ -151,32 +151,60 @@ export function ProfileScreen() {
     ]);
   };
 
+  const monthKey = getMonthKey(new Date());
+  const { expense } = getMonthlyTotals(transactions, monthKey);
+  const usageArr = getBudgetUsage(transactions, budgets, monthKey);
+  const totalLimit = usageArr.reduce((s, b) => s + b.limit, 0);
+  const totalSpent = usageArr.reduce((s, b) => s + b.spent, 0);
+  const budgetUsedPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0;
+  const activeGoals = goals.filter((g) => g.savedAmount < g.targetAmount).length;
+
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
+      {/* ── Top Bar ── */}
+      <View style={styles.topBar}>
         <Text style={styles.headerTitle}>Profile</Text>
-        <View style={styles.avatarWrapper}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{name?.[0]?.toUpperCase() || '?'}</Text>
-          </View>
-          <Text style={styles.displayName}>{name || 'Your Name'}</Text>
-        </View>
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
 
+        {/* ── User Card ── */}
+        <View style={styles.userCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{name?.[0]?.toUpperCase() || '?'}</Text>
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.displayName}>{name || 'Your Name'}</Text>
+            <Text style={styles.displayPhone}>{user?.phone || ''}</Text>
+          </View>
+          <TouchableOpacity style={styles.editBtn} onPress={() => { setTempName(name); setEditNameVisible(true); }}>
+            <Text style={styles.editBtnText}>✏️ Edit</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Stats Row ── */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{formatCurrency(expense, currency)}</Text>
+            <Text style={styles.statLabel}>Monthly Exp</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{activeGoals}</Text>
+            <Text style={styles.statLabel}>Active Goals</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{budgetUsedPct}%</Text>
+            <Text style={styles.statLabel}>Budget Used</Text>
+          </View>
+        </View>
+
+
         {/* ── Account ── */}
         <Text style={styles.sectionLabel}>Account</Text>
         <View style={styles.sectionCard}>
-          <SettingsRow
-            emoji="✏️"
-            label="Edit Name"
-            onPress={() => { setTempName(name); setEditNameVisible(true); }}
-          />
-          <View style={styles.divider} />
           <SettingsRow
             emoji="📱"
             label={`Phone: ${user?.phone || '-'}`}
@@ -297,45 +325,95 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
 
-  // Header
-  header: {
-    backgroundColor: Colors.primary,
+  // Top Bar
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Theme.spacing.lg,
     paddingTop: Theme.spacing.md,
-    paddingBottom: Theme.spacing.xl,
-    alignItems: 'center',
+    paddingBottom: Theme.spacing.sm,
   },
   headerTitle: {
-    alignSelf: 'flex-start',
-    color: Colors.textOnPrimary,
     fontSize: Theme.fontSize.xl,
     fontWeight: Theme.fontWeight.bold,
-    marginBottom: Theme.spacing.lg,
+    color: Colors.textPrimary,
   },
-  avatarWrapper: { alignItems: 'center' },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#6B7280',
+  gearWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Theme.shadow.card,
+  },
+  gear: { fontSize: 18 },
+
+  // User Card
+  userCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    marginHorizontal: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.md,
     marginBottom: Theme.spacing.sm,
+    ...Theme.shadow.card,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3B6FE8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Theme.spacing.md,
   },
   avatarText: {
     color: '#FFFFFF',
-    fontSize: Theme.fontSize.xxl,
+    fontSize: Theme.fontSize.xl,
     fontWeight: Theme.fontWeight.bold,
   },
+  userInfo: { flex: 1 },
   displayName: {
-    color: Colors.textOnPrimary,
     fontSize: Theme.fontSize.lg,
-    fontWeight: Theme.fontWeight.semibold,
+    fontWeight: Theme.fontWeight.bold,
+    color: Colors.textPrimary,
   },
+  displayPhone: {
+    fontSize: Theme.fontSize.sm,
+    color: Colors.textTertiary,
+    marginTop: 2,
+  },
+  editBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: Colors.cardSubtle,
+    borderRadius: Theme.radius.full,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  editBtnText: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+
+  // Stats Row
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.card,
+    marginHorizontal: Theme.spacing.lg,
+    borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
+    ...Theme.shadow.card,
+  },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: Theme.fontSize.md, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
+  statLabel: { fontSize: 10, color: Colors.textTertiary, fontWeight: '500', marginTop: 2 },
+  statDivider: { width: 1, backgroundColor: Colors.divider, marginVertical: 4 },
 
   // Body
   body: { flex: 1 },
-  bodyContent: { paddingTop: Theme.spacing.md, paddingBottom: 40 },
+  bodyContent: { paddingBottom: 40 },
 
   sectionLabel: {
     fontSize: Theme.fontSize.xs,

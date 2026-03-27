@@ -6,13 +6,12 @@ import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
 import { AppInput } from '@/components/common/AppInput';
 import { AppButton } from '@/components/common/AppButton';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 
-const PRESET_ICONS = [
-  'star', 'heart', 'coffee', 'music', 'camera', 'book', 'bike', 'basketball',
-  'soccer', 'flower', 'tree', 'pizza', 'beer', 'cocktail', 'gamepad-variant',
-  'dog', 'cat', 'baby', 'dumbbell', 'meditation', 'brush', 'hammer', 'wrench',
-  'leaf', 'fire', 'water', 'weather-sunny', 'cloud', 'bank', 'cash',
+const PRESET_EMOJIS = [
+  '⭐', '❤️', '☕', '🎵', '📷', '📖', '🚴', '🏀',
+  '⚽', '🌸', '🌳', '🍕', '🍺', '🍹', '🎮', '🐶',
+  '🐱', '👶', '💪', '🧘', '🎨', '🔨', '🔧', '🌿',
+  '🔥', '💧', '☀️', '☁️', '🏦', '💵',
 ];
 
 const PRESET_COLORS = [
@@ -28,14 +27,14 @@ export function AddCategoryScreen() {
   const categoryType = route.params?.type ?? 'both';
 
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('star');
+  const [emoji, setEmoji] = useState('⭐');
   const [color, setColor] = useState('#FF6B6B');
   const [loading, setLoading] = useState(false);
 
   const handleAdd = async () => {
     if (!name.trim()) { Alert.alert('Enter a category name'); return; }
     setLoading(true);
-    await addCustomCategory({ name: name.trim(), icon, color, type: categoryType });
+    await addCustomCategory({ name: name.trim(), icon: emoji, emoji, color, type: categoryType });
     setLoading(false);
     navigation.goBack();
   };
@@ -52,7 +51,7 @@ export function AddCategoryScreen() {
         {/* Preview */}
         <View style={styles.preview}>
           <View style={[styles.previewIcon, { backgroundColor: color + '33' }]}>
-            <MaterialCommunityIcons name={icon as any} size={28} color={color} />
+            <Text style={styles.previewEmoji}>{emoji}</Text>
           </View>
           <Text style={styles.previewName}>{name || 'Category Name'}</Text>
         </View>
@@ -70,15 +69,15 @@ export function AddCategoryScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionLabel}>Pick an Icon</Text>
-        <View style={styles.iconGrid}>
-          {PRESET_ICONS.map((ic) => (
+        <Text style={styles.sectionLabel}>Pick an Emoji</Text>
+        <View style={styles.emojiGrid}>
+          {PRESET_EMOJIS.map((em) => (
             <TouchableOpacity
-              key={ic}
-              style={[styles.iconBtn, icon === ic && styles.iconBtnActive]}
-              onPress={() => setIcon(ic)}
+              key={em}
+              style={[styles.emojiBtn, emoji === em && styles.emojiBtnActive]}
+              onPress={() => setEmoji(em)}
             >
-              <MaterialCommunityIcons name={ic as any} size={22} color={icon === ic ? Colors.primary : Colors.textSecondary} />
+              <Text style={styles.emojiText}>{em}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -97,12 +96,14 @@ const styles = StyleSheet.create({
   content: { padding: Theme.spacing.lg, paddingBottom: 40 },
   preview: { alignItems: 'center', marginBottom: Theme.spacing.lg, padding: Theme.spacing.lg, backgroundColor: Colors.card, borderRadius: Theme.radius.xl },
   previewIcon: { width: 64, height: 64, borderRadius: Theme.radius.xl, alignItems: 'center', justifyContent: 'center', marginBottom: Theme.spacing.sm },
+  previewEmoji: { fontSize: 30 },
   previewName: { fontSize: Theme.fontSize.lg, fontWeight: '600', color: Colors.textPrimary },
   sectionLabel: { fontSize: Theme.fontSize.sm, fontWeight: '500', color: Colors.textSecondary, marginBottom: Theme.spacing.sm, marginTop: Theme.spacing.sm },
   colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: Theme.spacing.md },
   colorDot: { width: 36, height: 36, borderRadius: 18 },
   colorDotActive: { borderWidth: 3, borderColor: Colors.primary, transform: [{ scale: 1.15 }] },
-  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  iconBtn: { width: 48, height: 48, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderWidth: 2, borderColor: 'transparent' },
-  iconBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.cardMint },
+  emojiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  emojiBtn: { width: 50, height: 50, borderRadius: Theme.radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card, borderWidth: 2, borderColor: 'transparent' },
+  emojiBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
+  emojiText: { fontSize: 24 },
 });

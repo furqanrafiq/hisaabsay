@@ -6,6 +6,7 @@ import { Theme } from '@/constants/theme';
 interface Props {
   pct: number;
   height?: number;
+  color?: string;
 }
 
 function getColor(pct: number) {
@@ -14,11 +15,11 @@ function getColor(pct: number) {
   return Colors.income;
 }
 
-export function ProgressBar({ pct, height = 8 }: Props) {
+export function ProgressBar({ pct, height = 8, color }: Props) {
   const clamped = Math.min(100, Math.max(0, pct));
   return (
     <View style={[styles.track, { height }]}>
-      <View style={[styles.fill, { width: `${clamped}%`, backgroundColor: getColor(pct), height }]} />
+      <View style={[styles.fill, { width: `${clamped}%`, backgroundColor: color ?? getColor(pct), height }]} />
     </View>
   );
 }

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableWithoutFeedback } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
@@ -31,6 +31,8 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
 }
 
 export function DonutChart({ slices, size = 180, thickness = 32, centerLabel, centerSub }: Props) {
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+
   const total = slices.reduce((s, sl) => s + sl.value, 0);
   const cx = size / 2;
   const cy = size / 2;
@@ -49,32 +51,67 @@ export function DonutChart({ slices, size = 180, thickness = 32, centerLabel, ce
     );
   }
 
+  const validSlices = slices.filter((sl) => sl.value > 0);
+
   let currentDeg = 0;
-  const paths = slices
-    .filter((sl) => sl.value > 0)
-    .map((sl, i) => {
-      const sweep = (sl.value / total) * 358; // 358 to leave a small gap
-      const path = arcPath(cx, cy, r, currentDeg, currentDeg + sweep);
-      currentDeg += sweep + 1;
-      return <Path key={i} d={path} stroke={sl.color} strokeWidth={thickness} fill="none" strokeLinecap="round" />;
-    });
+  const paths = validSlices.map((sl, i) => {
+    const sweep = (sl.value / total) * 358;
+    const path = arcPath(cx, cy, r, currentDeg, currentDeg + sweep);
+    currentDeg += sweep + 1;
+
+    const isSelected = selectedIndex === i;
+    const dimmed = selectedIndex !== null && !isSelected;
+
+    return (
+      <Path
+        key={i}
+        d={path}
+        stroke={sl.color}
+        strokeWidth={isSelected ? thickness + 6 : thickness}
+        fill="none"
+        strokeLinecap="round"
+        opacity={dimmed ? 0.3 : 1}
+        onPress={() => setSelectedIndex(isSelected ? null : i)}
+      />
+    );
+  });
+
+  const selected = selectedIndex !== null ? validSlices[selectedIndex] : null;
+  const pct = selected ? Math.round((selected.value / total) * 100) : null;
 
   return (
     <View style={[styles.wrap, { width: size, height: size }]}>
       <Svg width={size} height={size}>{paths}</Svg>
-      {centerLabel && (
-        <View style={styles.center}>
-          <Text style={styles.centerLabel}>{centerLabel}</Text>
-          {centerSub && <Text style={styles.centerSub}>{centerSub}</Text>}
+
+      {/* Tapping the center deselects */}
+      <TouchableWithoutFeedback onPress={() => setSelectedIndex(null)}>
+        <View style={[styles.center, { width: (r - thickness / 2) * 2, height: (r - thickness / 2) * 2, borderRadius: r }]}>
+          {selected ? (
+            <>
+              <View style={[styles.dot, { backgroundColor: selected.color }]} />
+              <Text style={[styles.selectedLabel, { color: selected.color }]} numberOfLines={2}>
+                {selected.label}
+              </Text>
+              <Text style={styles.selectedPct}>{pct}%</Text>
+            </>
+          ) : (
+            <>
+              {centerLabel && <Text style={styles.centerLabel}>{centerLabel}</Text>}
+              {centerSub && <Text style={styles.centerSub}>{centerSub}</Text>}
+            </>
+          )}
         </View>
-      )}
+      </TouchableWithoutFeedback>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
-  center: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  centerLabel: { fontSize: Theme.fontSize.md, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
-  centerSub: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 2 },
+  center: { position: 'absolute', alignItems: 'center', justifyContent: 'center', padding: 4 },
+  centerLabel: { fontSize: Theme.fontSize.md, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3, textAlign: 'center' },
+  centerSub: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 2, textAlign: 'center' },
+  dot: { width: 8, height: 8, borderRadius: 4, marginBottom: 4 },
+  selectedLabel: { fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 14 },
+  selectedPct: { fontSize: Theme.fontSize.md, fontWeight: '800', color: Colors.textPrimary, marginTop: 2 },
 });

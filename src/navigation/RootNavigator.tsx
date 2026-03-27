@@ -8,7 +8,9 @@ import { MainTabs } from './MainTabs';
 import { AddTransactionScreen } from '@/screens/transactions/AddTransactionScreen';
 import { EditTransactionScreen } from '@/screens/transactions/EditTransactionScreen';
 import { AddBudgetScreen } from '@/screens/budget/AddBudgetScreen';
+import { BudgetDetailScreen } from '@/screens/budget/BudgetDetailScreen';
 import { AddGoalScreen } from '@/screens/goals/AddGoalScreen';
+import { GoalDetailScreen } from '@/screens/goals/GoalDetailScreen';
 import { AddCategoryScreen } from '@/screens/categories/AddCategoryScreen';
 import { Colors } from '@/constants/colors';
 
@@ -33,7 +35,9 @@ export function RootNavigator() {
           <Stack.Screen name="AddTransaction" component={AddTransactionScreen} options={{ presentation: 'modal' }} />
           <Stack.Screen name="EditTransaction" component={EditTransactionScreen} options={{ presentation: 'modal' }} />
           <Stack.Screen name="AddBudget" component={AddBudgetScreen} options={{ presentation: 'modal' }} />
+          <Stack.Screen name="BudgetDetail" component={BudgetDetailScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="AddGoal" component={AddGoalScreen} options={{ presentation: 'modal' }} />
+          <Stack.Screen name="GoalDetail" component={GoalDetailScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="AddCategory" component={AddCategoryScreen} options={{ presentation: 'modal' }} />
         </Stack.Navigator>
       ) : (

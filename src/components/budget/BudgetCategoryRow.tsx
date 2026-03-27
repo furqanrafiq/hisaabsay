@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { getCategoryById } from '@/constants/categories';
 import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
@@ -17,33 +16,46 @@ interface Props {
 
 export function BudgetCategoryRow({ categoryId, limit, spent, pct, currency }: Props) {
   const cat = getCategoryById(categoryId);
+  const isOver = pct >= 100;
+  const barColor = isOver ? Colors.expense : pct >= 80 ? Colors.warning : Colors.primaryLight;
   return (
     <View style={styles.row}>
       <View style={[styles.iconWrap, { backgroundColor: cat.color + '22' }]}>
-        <MaterialCommunityIcons name={cat.icon as any} size={20} color={cat.color} />
+        <Text style={styles.emoji}>{cat.emoji}</Text>
       </View>
       <View style={styles.content}>
         <View style={styles.topRow}>
           <Text style={styles.name}>{cat.name}</Text>
-          <Text style={styles.amounts}>
-            <Text style={{ color: Colors.textPrimary }}>{formatCurrency(spent, currency)}</Text>
-            <Text style={styles.limit}> / {formatCurrency(limit, currency)}</Text>
+          <Text style={[styles.pctText, { color: isOver ? Colors.expense : Colors.textSecondary }]}>
+            {pct}%
           </Text>
         </View>
-        <ProgressBar pct={pct} height={6} />
-        <Text style={styles.pctText}>{pct}% used</Text>
+        <View style={styles.amountsRow}>
+          <Text style={styles.spent}>{formatCurrency(spent, currency)}</Text>
+          <Text style={styles.limit}> / {formatCurrency(limit, currency)}</Text>
+        </View>
+        <ProgressBar pct={pct} height={6} color={barColor} />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: Theme.spacing.md },
-  iconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14 },
+  iconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Theme.spacing.md,
+  },
+  emoji: { fontSize: 22 },
   content: { flex: 1 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   name: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary },
-  amounts: { fontSize: Theme.fontSize.sm, fontWeight: '600' },
-  limit: { color: Colors.textTertiary, fontWeight: '400' },
-  pctText: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 5, fontWeight: '500' },
+  pctText: { fontSize: Theme.fontSize.sm, fontWeight: '700' },
+  amountsRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 },
+  spent: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textPrimary },
+  limit: { fontSize: Theme.fontSize.sm, color: Colors.textTertiary },
 });

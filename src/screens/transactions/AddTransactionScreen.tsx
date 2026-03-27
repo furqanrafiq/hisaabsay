@@ -1,32 +1,38 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity, ScrollView,
+  KeyboardAvoidingView, Platform, Alert, TextInput, Switch,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useFinance } from '@/context/FinanceContext';
 import { useAuth } from '@/context/AuthContext';
 import { CATEGORIES } from '@/constants/categories';
 import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
-import { AppInput } from '@/components/common/AppInput';
-import { AppButton } from '@/components/common/AppButton';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getMonthKey } from '@/utils/formatDate';
 import { format } from 'date-fns';
+
+const QUICK_CATS = ['food', 'transport', 'shopping', 'utilities', 'entertainment', 'health'];
 
 export function AddTransactionScreen() {
   const navigation = useNavigation<any>();
   const { addTransaction, customCategories, budgets, transactions } = useFinance();
   const { user } = useAuth();
+  const currency = user?.currency ?? 'PKR';
+
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('food');
   const [note, setNote] = useState('');
-  const [fixed, setFixed] = useState(false);
+  const [recurring, setRecurring] = useState(false);
+  const [showAllCats, setShowAllCats] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const defaultCats = CATEGORIES.filter((c) => c.type === type || c.type === 'both');
-  const customCats = customCategories.filter((c) => c.type === type || c.type === 'both');
-  const allCats = [...defaultCats, ...customCats];
+  const today = format(new Date(), 'd MMMM yyyy');
+  const allCats = [...CATEGORIES.filter(c => c.type === type || c.type === 'both'), ...customCategories.filter(c => c.type === type || c.type === 'both')];
+  const quickCats = CATEGORIES.filter(c => QUICK_CATS.includes(c.id) && (c.type === type || c.type === 'both'));
+  const selectedCat = allCats.find(c => c.id === category) ?? CATEGORIES[0];
 
   const doAdd = async (overspendReason?: string) => {
     const amt = parseFloat(amount);
@@ -34,119 +40,177 @@ export function AddTransactionScreen() {
     await addTransaction({
       type, amount: amt, category, note,
       date: format(new Date(), 'yyyy-MM-dd'),
-      fixed,
+      fixed: recurring,
       overspendReason: overspendReason ?? '',
     });
     setLoading(false);
     navigation.goBack();
   };
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     const amt = parseFloat(amount);
-    if (!amount || isNaN(amt) || amt <= 0) { Alert.alert('Invalid amount'); return; }
+    if (!amount || isNaN(amt) || amt <= 0) { Alert.alert('Enter a valid amount'); return; }
 
     if (type === 'expense') {
       const monthKey = getMonthKey(new Date());
-      const budget = budgets.find((b) => b.category === category && b.month === monthKey);
+      const budget = budgets.find(b => b.category === category && b.month === monthKey);
       if (budget) {
         const spent = transactions
-          .filter((t) => t.type === 'expense' && t.category === category && t.date.startsWith(monthKey))
+          .filter(t => t.type === 'expense' && t.category === category && t.date.startsWith(monthKey))
           .reduce((s, t) => s + t.amount, 0);
         if (spent + amt > budget.limit) {
-          const overBy = formatCurrency(spent + amt - budget.limit, user?.currency ?? 'PKR');
-          Alert.prompt(
-            'Over Budget!',
-            `This exceeds your budget for this category by ${overBy}. Please give a reason:`,
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Add Anyway', onPress: (reason) => doAdd(reason || '') },
-            ],
-            'plain-text',
-            '',
-          );
+          const over = formatCurrency(spent + amt - budget.limit, currency);
+          Alert.prompt('Over Budget!', `Exceeds budget by ${over}. Reason?`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Add Anyway', onPress: (r) => doAdd(r || '') },
+          ], 'plain-text', '');
           return;
         }
       }
     }
-
     await doAdd();
   };
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}><Text style={styles.cancel}>Cancel</Text></TouchableOpacity>
-        <Text style={styles.title}>Add Transaction</Text>
-        <View style={{ width: 60 }} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
+        <View>
+          <Text style={styles.title}>Add Transaction</Text>
+          <Text style={styles.subtitle}>Fill in the details below 📝</Text>
+        </View>
+        <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Type Toggle */}
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
+        {/* ── Amount Card ── */}
+        <View style={styles.amountCard}>
+          <Text style={styles.amountLabel}>Amount ({currency})</Text>
+          <View style={styles.amountRow}>
+            <Text style={styles.amountPrefix}>Rs.</Text>
+            <TextInput
+              style={styles.amountInput}
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              placeholder="0.00"
+              placeholderTextColor={Colors.textTertiary}
+            />
+          </View>
+        </View>
+
+        {/* ── Expense / Income Toggle ── */}
         <View style={styles.typeRow}>
-          {(['expense', 'income'] as const).map((t) => (
+          {(['expense', 'income'] as const).map(t => (
             <TouchableOpacity
               key={t}
-              style={[styles.typeBtn, type === t && (t === 'income' ? styles.typeBtnIncome : styles.typeBtnExpense)]}
+              style={[styles.typeBtn, type === t && styles.typeBtnActive]}
               onPress={() => { setType(t); setCategory(t === 'income' ? 'salary' : 'food'); }}
             >
               <Text style={[styles.typeBtnText, type === t && styles.typeBtnTextActive]}>
-                {t === 'income' ? '+ Income' : '- Expense'}
+                {t === 'expense' ? '💸 Expense' : '💰 Income'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <AppInput label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder={`0.00 ${user?.currency ?? 'PKR'}`} />
-        <AppInput label="Note (optional)" value={note} onChangeText={setNote} placeholder="What was this for?" />
-
-        {/* Fixed / Variable toggle */}
-        <Text style={styles.sectionLabel}>Type</Text>
-        <View style={styles.fixedRow}>
-          {([false, true] as const).map((val) => (
-            <TouchableOpacity
-              key={String(val)}
-              style={[styles.fixedBtn, fixed === val && styles.fixedBtnActive]}
-              onPress={() => setFixed(val)}
-            >
-              <MaterialCommunityIcons
-                name={val ? 'lock-outline' : 'refresh'}
-                size={14}
-                color={fixed === val ? Colors.textOnPrimary : Colors.textSecondary}
-              />
-              <Text style={[styles.fixedBtnText, fixed === val && styles.fixedBtnTextActive]}>
-                {val ? 'Fixed' : 'Variable'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={styles.catHeader}>
-          <Text style={styles.sectionLabel}>Category</Text>
-          <TouchableOpacity
-            style={styles.addCatBtn}
-            onPress={() => navigation.navigate('AddCategory', { type })}
-          >
-            <MaterialCommunityIcons name="plus" size={14} color={Colors.primary} />
-            <Text style={styles.addCatText}>Add Custom</Text>
+        {/* ── Form Fields ── */}
+        <View style={styles.formCard}>
+          {/* Category */}
+          <TouchableOpacity style={styles.fieldRow} onPress={() => setShowAllCats(v => !v)}>
+            <Text style={styles.fieldLabel}>Category 🏷️</Text>
+            <View style={styles.fieldValueRow}>
+              <Text style={styles.fieldEmoji}>{selectedCat.emoji}</Text>
+              <Text style={styles.fieldValue}>{selectedCat.name}</Text>
+              <Text style={styles.fieldChevron}>{showAllCats ? '∨' : '›'}</Text>
+            </View>
           </TouchableOpacity>
+
+          {showAllCats && (
+            <View style={styles.catGrid}>
+              {allCats.map(c => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[styles.catChip, category === c.id && styles.catChipActive]}
+                  onPress={() => { setCategory(c.id); setShowAllCats(false); }}
+                >
+                  <Text style={styles.catChipEmoji}>{c.emoji}</Text>
+                  <Text style={[styles.catChipText, category === c.id && styles.catChipTextActive]} numberOfLines={1}>{c.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
+          {/* Date */}
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Date 📅</Text>
+            <Text style={styles.fieldValue}>{today}</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Notes */}
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Notes 📝</Text>
+            <TextInput
+              style={[styles.fieldValue, styles.notesInput]}
+              value={note}
+              onChangeText={setNote}
+              placeholder="Add a note..."
+              placeholderTextColor={Colors.textTertiary}
+            />
+          </View>
         </View>
 
-        <View style={styles.catGrid}>
-          {allCats.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              style={[styles.catItem, category === c.id && styles.catItemActive]}
-              onPress={() => setCategory(c.id)}
-            >
-              <View style={[styles.catIcon, { backgroundColor: c.color + '33' }]}>
-                <MaterialCommunityIcons name={c.icon as any} size={20} color={c.color} />
-              </View>
-              <Text style={styles.catLabel} numberOfLines={1}>{c.name}</Text>
-            </TouchableOpacity>
-          ))}
+        {/* ── Quick Categories ── */}
+        {!showAllCats && (
+          <View style={styles.quickSection}>
+            <Text style={styles.quickLabel}>Quick Categories</Text>
+            <View style={styles.quickRow}>
+              {quickCats.map(c => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[styles.quickChip, category === c.id && styles.quickChipActive]}
+                  onPress={() => setCategory(c.id)}
+                >
+                  <Text style={styles.quickEmoji}>{c.emoji}</Text>
+                  <Text style={[styles.quickText, category === c.id && styles.quickTextActive]}>{c.name.split(' ')[0]}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ── Recurring ── */}
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>🔄 Recurring Transaction</Text>
+          <Switch
+            value={recurring}
+            onValueChange={setRecurring}
+            trackColor={{ true: Colors.primary, false: Colors.border }}
+            thumbColor={Colors.card}
+          />
         </View>
 
-        <AppButton title="Add Transaction" onPress={handleAdd} loading={loading} style={{ marginTop: Theme.spacing.lg }} />
+        {/* ── Save Button ── */}
+        <TouchableOpacity
+          style={[styles.saveBtn, loading && { opacity: 0.7 }]}
+          onPress={handleSave}
+          activeOpacity={0.85}
+          disabled={loading}
+        >
+          <Text style={styles.saveBtnText}>
+            {loading ? 'Saving…' : 'Save Transaction ✓'}
+          </Text>
+        </TouchableOpacity>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -154,29 +218,80 @@ export function AddTransactionScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Theme.spacing.md, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  cancel: { fontSize: Theme.fontSize.md, color: Colors.primaryLight, fontWeight: '600' },
+
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Theme.spacing.lg, paddingTop: Theme.spacing.lg, paddingBottom: Theme.spacing.md,
+    backgroundColor: Colors.background,
+  },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  backArrow: { fontSize: 22, color: Colors.textPrimary, fontWeight: '500' },
   title: { fontSize: Theme.fontSize.lg, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
-  scroll: { flex: 1 },
+  subtitle: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 1 },
+
   content: { padding: Theme.spacing.lg, paddingBottom: 40 },
-  typeRow: { flexDirection: 'row', marginBottom: Theme.spacing.lg, backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 4 },
-  typeBtn: { flex: 1, height: 42, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center' },
-  typeBtnExpense: { backgroundColor: Colors.expense },
-  typeBtnIncome: { backgroundColor: Colors.income },
+
+  // Amount
+  amountCard: {
+    backgroundColor: Colors.card, borderRadius: Theme.radius.lg,
+    padding: Theme.spacing.lg, marginBottom: Theme.spacing.md, ...Theme.shadow.card,
+  },
+  amountLabel: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6 },
+  amountRow: { flexDirection: 'row', alignItems: 'center' },
+  amountPrefix: { fontSize: Theme.fontSize.xl, fontWeight: '700', color: Colors.textSecondary, marginRight: 8 },
+  amountInput: { flex: 1, fontSize: 36, fontWeight: '300', color: Colors.textPrimary, letterSpacing: -0.5 },
+
+  // Type toggle
+  typeRow: {
+    flexDirection: 'row', backgroundColor: Colors.card, borderRadius: Theme.radius.full,
+    padding: 4, marginBottom: Theme.spacing.md, ...Theme.shadow.card,
+  },
+  typeBtn: { flex: 1, height: 44, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center' },
+  typeBtnActive: { backgroundColor: Colors.primary },
   typeBtnText: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textSecondary },
-  typeBtnTextActive: { color: Colors.textOnPrimary },
-  sectionLabel: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textSecondary, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: Theme.spacing.sm },
-  fixedRow: { flexDirection: 'row', gap: 8, marginBottom: Theme.spacing.lg, backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 4 },
-  fixedBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 36, borderRadius: Theme.radius.full },
-  fixedBtnActive: { backgroundColor: Colors.primary },
-  fixedBtnText: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textSecondary },
-  fixedBtnTextActive: { color: Colors.textOnPrimary },
-  catHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Theme.spacing.sm },
-  addCatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: Colors.primaryMuted, borderRadius: Theme.radius.full },
-  addCatText: { fontSize: Theme.fontSize.xs, color: Colors.primary, fontWeight: '700' },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  catItem: { width: '30%', alignItems: 'center', padding: Theme.spacing.sm, borderRadius: Theme.radius.md, backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border },
-  catItemActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
-  catIcon: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  catLabel: { fontSize: Theme.fontSize.xs, color: Colors.textPrimary, textAlign: 'center', fontWeight: '600' },
+  typeBtnTextActive: { color: '#fff' },
+
+  // Form card
+  formCard: { backgroundColor: Colors.card, borderRadius: Theme.radius.lg, marginBottom: Theme.spacing.md, ...Theme.shadow.card, overflow: 'hidden' },
+  fieldRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Theme.spacing.md, paddingVertical: 14 },
+  fieldLabel: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, fontWeight: '500', width: 90 },
+  fieldValueRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
+  fieldEmoji: { fontSize: 16 },
+  fieldValue: { fontSize: Theme.fontSize.sm, fontWeight: '500', color: Colors.textPrimary, flex: 1, textAlign: 'right' },
+  fieldChevron: { fontSize: 18, color: Colors.textTertiary, marginLeft: 4 },
+  notesInput: { textAlign: 'right', minHeight: 20 },
+  divider: { height: 1, backgroundColor: Colors.divider, marginHorizontal: Theme.spacing.md },
+
+  // Category grid (expanded)
+  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: Theme.spacing.md, paddingTop: 0 },
+  catChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Theme.radius.full, backgroundColor: Colors.cardSubtle, borderWidth: 1.5, borderColor: 'transparent' },
+  catChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
+  catChipEmoji: { fontSize: 14 },
+  catChipText: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  catChipTextActive: { color: Colors.primary },
+
+  // Quick categories
+  quickSection: { marginBottom: Theme.spacing.md },
+  quickLabel: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textPrimary, marginBottom: Theme.spacing.sm },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quickChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Theme.radius.full, backgroundColor: Colors.card, ...Theme.shadow.card },
+  quickChipActive: { backgroundColor: Colors.primary },
+  quickEmoji: { fontSize: 14 },
+  quickText: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary },
+  quickTextActive: { color: '#fff' },
+
+  // Recurring toggle
+  toggleRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.card, borderRadius: Theme.radius.lg, padding: Theme.spacing.md,
+    marginBottom: Theme.spacing.lg, ...Theme.shadow.card,
+  },
+  toggleLabel: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textPrimary },
+
+  // Save button
+  saveBtn: {
+    height: 56, borderRadius: Theme.radius.xl, backgroundColor: Colors.primary,
+    alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated,
+  },
+  saveBtnText: { color: '#fff', fontSize: Theme.fontSize.md, fontWeight: '700', letterSpacing: 0.3 },
 });

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/context/AuthContext';
@@ -9,140 +9,129 @@ import { Theme } from '@/constants/theme';
 import { TransactionItem } from '@/components/transactions/TransactionItem';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Transaction } from '@/types';
-import { CATEGORIES, getCategoryById } from '@/constants/categories';
-import { formatDisplayDate, getMonthKey, formatMonthYear } from '@/utils/formatDate';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { addMonths, subMonths, addYears, subYears, format } from 'date-fns';
+import { CATEGORIES } from '@/constants/categories';
+import { formatDisplayDate, getMonthKey } from '@/utils/formatDate';
+import { formatCurrency } from '@/utils/formatCurrency';
+import { format, subMonths } from 'date-fns';
 
 type Filter = 'all' | 'income' | 'expense';
-type FixedFilter = 'all' | 'fixed' | 'variable';
-type ViewMode = 'month' | 'year';
+
+// Build a list of recent months for the tab bar
+function getMonthTabs(count = 6) {
+  const tabs = [];
+  const now = new Date();
+  for (let i = count - 1; i >= 0; i--) {
+    const d = subMonths(now, i);
+    tabs.push({ key: getMonthKey(d), label: format(d, 'MMM'), date: d });
+  }
+  return tabs;
+}
 
 export function TransactionsScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { transactions, customCategories } = useFinance();
   const [filter, setFilter] = useState<Filter>('all');
-  const [fixedFilter, setFixedFilter] = useState<FixedFilter>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedMonthKey, setSelectedMonthKey] = useState(getMonthKey(new Date()));
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchVisible, setSearchVisible] = useState(false);
   const currency = user?.currency ?? 'PKR';
 
+  const monthTabs = useMemo(() => getMonthTabs(6), []);
   const allCategories = [...CATEGORIES, ...customCategories];
 
-  const periodFiltered = useMemo(() => {
-    if (viewMode === 'month') {
-      const monthKey = getMonthKey(currentDate);
-      return transactions.filter((t) => t.date.startsWith(monthKey));
-    } else {
-      const yearKey = format(currentDate, 'yyyy');
-      return transactions.filter((t) => t.date.startsWith(yearKey));
-    }
-  }, [transactions, viewMode, currentDate]);
+  const periodFiltered = useMemo(
+    () => transactions.filter((t) => t.date.startsWith(selectedMonthKey)),
+    [transactions, selectedMonthKey],
+  );
+
+  const income = useMemo(() => periodFiltered.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0), [periodFiltered]);
+  const expense = useMemo(() => periodFiltered.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [periodFiltered]);
 
   const typeFiltered = useMemo(
     () => periodFiltered.filter((t) => filter === 'all' || t.type === filter),
-    [periodFiltered, filter]
+    [periodFiltered, filter],
   );
 
-  const fixedFiltered = useMemo(() => {
-    if (fixedFilter === 'all') return typeFiltered;
-    if (fixedFilter === 'fixed') return typeFiltered.filter((t) => t.fixed === true);
-    return typeFiltered.filter((t) => !t.fixed);
-  }, [typeFiltered, fixedFilter]);
-
   const searchFiltered = useMemo(() => {
-    if (!searchQuery.trim()) return fixedFiltered;
+    if (!searchQuery.trim()) return typeFiltered;
     const q = searchQuery.toLowerCase();
-    return fixedFiltered.filter((t) => {
+    return typeFiltered.filter((t) => {
       const cat = allCategories.find((c) => c.id === t.category);
-      return (
-        t.note.toLowerCase().includes(q) ||
-        (cat?.name.toLowerCase().includes(q) ?? false)
-      );
+      return t.note.toLowerCase().includes(q) || (cat?.name.toLowerCase().includes(q) ?? false);
     });
-  }, [fixedFiltered, searchQuery, allCategories]);
+  }, [typeFiltered, searchQuery, allCategories]);
 
   const grouped: { date: string; data: Transaction[] }[] = useMemo(() => {
     const groups: { date: string; data: Transaction[] }[] = [];
     searchFiltered.forEach((t) => {
-      const label = viewMode === 'year' ? format(new Date(t.date), 'MMMM yyyy') : formatDisplayDate(t.date);
+      const label = formatDisplayDate(t.date);
       const existing = groups.find((g) => g.date === label);
       if (existing) existing.data.push(t);
       else groups.push({ date: label, data: [t] });
     });
     return groups;
-  }, [searchFiltered, viewMode]);
-
-  const goBack = () => viewMode === 'month' ? setCurrentDate((d) => subMonths(d, 1)) : setCurrentDate((d) => subYears(d, 1));
-  const goForward = () => viewMode === 'month' ? setCurrentDate((d) => addMonths(d, 1)) : setCurrentDate((d) => addYears(d, 1));
-  const periodLabel = viewMode === 'month' ? formatMonthYear(currentDate) : format(currentDate, 'yyyy');
+  }, [searchFiltered]);
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
-      {/* Top bar: period selector + search toggle */}
-      <View style={styles.topBar}>
-        <View style={styles.monthRow}>
-          <TouchableOpacity onPress={goBack} style={styles.monthBtn}>
-            <Text style={styles.monthArrow}>‹</Text>
+
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Transactions</Text>
+      </View>
+
+      {/* ── Month Tabs ── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.monthTabs}
+      >
+        {monthTabs.map((tab) => {
+          const active = tab.key === selectedMonthKey;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.monthTab, active && styles.monthTabActive]}
+              onPress={() => setSelectedMonthKey(tab.key)}
+            >
+              <Text style={[styles.monthTabText, active && styles.monthTabTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* ── Search ── */}
+      <View style={styles.searchBar}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search transactions..."
+          placeholderTextColor={Colors.textTertiary}
+          returnKeyType="search"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Text style={{ color: Colors.textTertiary, fontSize: 16 }}>✕</Text>
           </TouchableOpacity>
-          <Text style={styles.monthLabel}>{periodLabel}</Text>
-          <TouchableOpacity onPress={goForward} style={styles.monthBtn}>
-            <Text style={styles.monthArrow}>›</Text>
-          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Income / Expense Summary ── */}
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>💰 Income</Text>
+          <Text style={[styles.summaryAmount, { color: Colors.income }]}>{formatCurrency(income, currency)}</Text>
         </View>
-        <View style={styles.topRight}>
-          {/* Month / Year toggle */}
-          <View style={styles.viewToggle}>
-            {(['month', 'year'] as ViewMode[]).map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.viewToggleBtn, viewMode === m && styles.viewToggleBtnActive]}
-                onPress={() => setViewMode(m)}
-              >
-                <Text style={[styles.viewToggleText, viewMode === m && styles.viewToggleTextActive]}>
-                  {m.charAt(0).toUpperCase() + m.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TouchableOpacity
-            style={styles.searchIcon}
-            onPress={() => { setSearchVisible((v) => !v); setSearchQuery(''); }}
-          >
-            <MaterialCommunityIcons
-              name={searchVisible ? 'close' : 'magnify'}
-              size={22}
-              color={Colors.primary}
-            />
-          </TouchableOpacity>
+        <View style={styles.summaryDivider} />
+        <View style={styles.summaryItem}>
+          <Text style={styles.summaryLabel}>💸 Spent</Text>
+          <Text style={[styles.summaryAmount, { color: Colors.expense }]}>{formatCurrency(expense, currency)}</Text>
         </View>
       </View>
 
-      {/* Search bar */}
-      {searchVisible && (
-        <View style={styles.searchBar}>
-          <MaterialCommunityIcons name="magnify" size={18} color={Colors.textSecondary} style={{ marginRight: 8 }} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search by note or category..."
-            placeholderTextColor={Colors.textSecondary}
-            autoFocus
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={Colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* Filter Bar */}
+      {/* ── Type Filter ── */}
       <View style={styles.filterBar}>
         {(['all', 'income', 'expense'] as Filter[]).map((f) => (
           <TouchableOpacity
@@ -157,21 +146,6 @@ export function TransactionsScreen() {
         ))}
       </View>
 
-      {/* Fixed/Variable filter */}
-      <View style={styles.fixedBar}>
-        {(['all', 'fixed', 'variable'] as FixedFilter[]).map((f) => (
-          <TouchableOpacity
-            key={f}
-            style={[styles.fixedBtn, fixedFilter === f && styles.fixedBtnActive]}
-            onPress={() => setFixedFilter(f)}
-          >
-            <Text style={[styles.fixedBtnText, fixedFilter === f && styles.fixedBtnTextActive]}>
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       <FlatList
         data={grouped}
         keyExtractor={(g) => g.date}
@@ -180,7 +154,7 @@ export function TransactionsScreen() {
         ListEmptyComponent={
           <EmptyState
             title={searchQuery ? 'No results found' : 'No transactions'}
-            subtitle={searchQuery ? 'Try a different search term' : 'Try a different period or filter'}
+            subtitle={searchQuery ? 'Try a different search term' : 'No transactions this month'}
           />
         }
         renderItem={({ item: group }) => (
@@ -210,34 +184,44 @@ export function TransactionsScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Theme.spacing.md, paddingVertical: Theme.spacing.sm, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  monthRow: { flexDirection: 'row', alignItems: 'center' },
-  monthBtn: { padding: Theme.spacing.sm },
-  monthArrow: { fontSize: 24, color: Colors.primary, fontWeight: '500' },
-  monthLabel: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary, minWidth: 110, textAlign: 'center' },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  viewToggle: { flexDirection: 'row', backgroundColor: Colors.cardSubtle, borderRadius: Theme.radius.full, padding: 2 },
-  viewToggleBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Theme.radius.full },
-  viewToggleBtnActive: { backgroundColor: Colors.primary },
-  viewToggleText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '500' },
-  viewToggleTextActive: { color: Colors.textOnPrimary },
-  searchIcon: { padding: 4 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, paddingHorizontal: Theme.spacing.md, paddingVertical: Theme.spacing.sm, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  searchInput: { flex: 1, fontSize: Theme.fontSize.md, color: Colors.textPrimary, height: 36 },
-  filterBar: { flexDirection: 'row', padding: Theme.spacing.sm, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 4 },
-  fixedBar: { flexDirection: 'row', padding: Theme.spacing.sm, paddingTop: 4, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: 4 },
-  fixedBtn: { flex: 1, height: 28, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.cardSubtle },
-  fixedBtnActive: { backgroundColor: Colors.primaryLight },
-  fixedBtnText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600', letterSpacing: 0.3 },
-  fixedBtnTextActive: { color: Colors.textOnPrimary },
-  filterBtn: { flex: 1, height: 34, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.cardSubtle },
+
+  // Header
+  header: { paddingHorizontal: Theme.spacing.lg, paddingTop: Theme.spacing.md, paddingBottom: Theme.spacing.sm },
+  title: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
+
+  // Month Tabs
+  monthTabs: { paddingHorizontal: Theme.spacing.lg, paddingBottom: Theme.spacing.sm, paddingRight: Theme.spacing.lg },
+  monthTab: { paddingHorizontal: 20, paddingVertical: 9, borderRadius: Theme.radius.full, backgroundColor: Colors.card, marginRight: 8, ...Theme.shadow.card },
+  monthTabActive: { backgroundColor: Colors.primary },
+  monthTabText: { fontSize: Theme.fontSize.sm, fontWeight: '600', color: Colors.textSecondary },
+  monthTabTextActive: { color: '#fff' },
+
+  // Search
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.card, marginHorizontal: Theme.spacing.lg, borderRadius: Theme.radius.lg, paddingHorizontal: Theme.spacing.md, paddingVertical: 10, marginBottom: Theme.spacing.sm, ...Theme.shadow.card },
+  searchIcon: { fontSize: 16, marginRight: 8 },
+  searchInput: { flex: 1, fontSize: Theme.fontSize.md, color: Colors.textPrimary, height: 24 },
+
+  // Summary
+  summaryRow: { flexDirection: 'row', backgroundColor: Colors.card, marginHorizontal: Theme.spacing.lg, borderRadius: Theme.radius.lg, padding: Theme.spacing.md, marginBottom: Theme.spacing.sm, ...Theme.shadow.card },
+  summaryItem: { flex: 1, alignItems: 'center' },
+  summaryLabel: { fontSize: Theme.fontSize.sm, color: Colors.textSecondary, fontWeight: '500', marginBottom: 4 },
+  summaryAmount: { fontSize: Theme.fontSize.lg, fontWeight: '800', letterSpacing: -0.3 },
+  summaryDivider: { width: 1, backgroundColor: Colors.divider, marginVertical: 4 },
+
+  // Filter
+  filterBar: { flexDirection: 'row', paddingHorizontal: Theme.spacing.lg, marginBottom: Theme.spacing.sm, gap: 8 },
+  filterBtn: { flex: 1, height: 34, borderRadius: Theme.radius.full, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.card },
   filterActive: { backgroundColor: Colors.primary },
-  filterText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600', letterSpacing: 0.3 },
-  filterTextActive: { color: Colors.textOnPrimary },
-  list: { padding: Theme.spacing.md, paddingBottom: 100 },
+  filterText: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600' },
+  filterTextActive: { color: '#fff' },
+
+  // List
+  list: { paddingHorizontal: Theme.spacing.lg, paddingBottom: 100 },
   group: { marginBottom: Theme.spacing.md },
-  dateLabel: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textTertiary, marginBottom: 6, letterSpacing: 0.8, textTransform: 'uppercase' },
-  groupCard: { backgroundColor: Colors.card, borderRadius: Theme.radius.lg, padding: Theme.spacing.md, ...Theme.shadow.card, borderWidth: 1, borderColor: Colors.border },
-  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 58, height: 58, borderRadius: 29, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
-  fabText: { color: Colors.textOnPrimary, fontSize: 28, fontWeight: '300', marginTop: -2 },
+  dateLabel: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textSecondary, marginBottom: 6 },
+  groupCard: { backgroundColor: Colors.card, borderRadius: Theme.radius.lg, paddingHorizontal: Theme.spacing.md, ...Theme.shadow.card },
+
+  // FAB
+  fab: { position: 'absolute', right: Theme.spacing.lg, bottom: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.elevated },
+  fabText: { color: '#fff', fontSize: 28, fontWeight: '300', marginTop: -2 },
 });

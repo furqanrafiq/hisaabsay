@@ -32,4 +32,16 @@ export const Colors = {
   error:         '#DC2626',
   success:       '#16A34A',
   overlay:       'rgba(0,0,0,0.45)',
+
+  // Chart palette — theme-consistent blues/slates
+  chart: [
+    '#1E293B',  // primary navy
+    '#3B82F6',  // blue
+    '#64748B',  // slate
+    '#0EA5E9',  // sky
+    '#6366F1',  // indigo
+    '#8B5CF6',  // violet
+    '#06B6D4',  // cyan
+    '#475569',  // slate-600
+  ],
 };

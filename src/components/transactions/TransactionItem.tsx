@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Transaction } from '@/types';
 import { CATEGORIES, getCategoryById, Category } from '@/constants/categories';
 import { Colors } from '@/constants/colors';
@@ -21,14 +20,16 @@ export function TransactionItem({ item, currency, onPress, extraCategories = [] 
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
       <View style={[styles.iconWrap, { backgroundColor: cat.color + '22' }]}>
-        <MaterialCommunityIcons name={cat.icon as any} size={22} color={cat.color} />
+        <Text style={styles.emoji}>{cat.emoji}</Text>
       </View>
       <View style={styles.info}>
         <View style={styles.nameRow}>
           <Text style={styles.catName}>{cat.name}</Text>
           {item.fixed && <View style={styles.fixedBadge}><Text style={styles.fixedBadgeText}>Fixed</Text></View>}
         </View>
-        <Text style={styles.note} numberOfLines={1}>{item.note || formatShortDate(item.date)}</Text>
+        <Text style={styles.note} numberOfLines={1}>
+          {item.note ? `${item.note} · ` : ''}{formatShortDate(item.date)}
+        </Text>
       </View>
       <Text style={[styles.amount, { color: item.type === 'income' ? Colors.income : Colors.expense }]}>
         {item.type === 'income' ? '+' : '-'}{formatCurrency(item.amount, currency)}
@@ -38,12 +39,31 @@ export function TransactionItem({ item, currency, onPress, extraCategories = [] 
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.divider },
-  iconWrap: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: Theme.spacing.md },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  iconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Theme.spacing.md,
+  },
+  emoji: { fontSize: 22 },
   info: { flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   catName: { fontSize: Theme.fontSize.md, fontWeight: '600', color: Colors.textPrimary },
-  fixedBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: Theme.radius.full, backgroundColor: Colors.primaryMuted },
+  fixedBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: Theme.radius.full,
+    backgroundColor: Colors.primaryMuted,
+  },
   fixedBadgeText: { fontSize: 9, fontWeight: '700', color: Colors.primary, letterSpacing: 0.5, textTransform: 'uppercase' },
   note: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 3 },
   amount: { fontSize: Theme.fontSize.md, fontWeight: '700', letterSpacing: -0.3 },
