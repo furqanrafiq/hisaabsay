@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   KeyboardAvoidingView, Platform, Alert, TextInput, Switch,
@@ -17,9 +17,8 @@ const QUICK_CATS = ['food', 'transport', 'shopping', 'utilities', 'entertainment
 
 export function AddTransactionScreen() {
   const navigation = useNavigation<any>();
-  const { addTransaction, customCategories, budgets, transactions } = useFinance();
+  const { addTransaction, customCategories, budgets, transactions, currencies, activeCurrency, accounts, activeAccountId } = useFinance();
   const { user } = useAuth();
-  const currency = user?.currency ?? 'PKR';
 
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
@@ -27,12 +26,31 @@ export function AddTransactionScreen() {
   const [note, setNote] = useState('');
   const [recurring, setRecurring] = useState(false);
   const [showAllCats, setShowAllCats] = useState(false);
+  const [showCurrencies, setShowCurrencies] = useState(false);
+  const [showAccounts, setShowAccounts] = useState(false);
+  const [currency, setCurrency] = useState(activeCurrency);
+  const [accountId, setAccountId] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   const today = format(new Date(), 'd MMMM yyyy');
   const allCats = [...CATEGORIES.filter(c => c.type === type || c.type === 'both'), ...customCategories.filter(c => c.type === type || c.type === 'both')];
   const quickCats = CATEGORIES.filter(c => QUICK_CATS.includes(c.id) && (c.type === type || c.type === 'both'));
   const selectedCat = allCats.find(c => c.id === category) ?? CATEGORIES[0];
+  const selectedCurrency = currencies.find(c => c.code === currency);
+  const symbol = selectedCurrency?.symbol || currency;
+
+  const currencyAccounts = useMemo(
+    () => accounts.filter(a => a.currency === currency && !a.archived),
+    [accounts, currency],
+  );
+  const selectedAccount = currencyAccounts.find(a => a.id === accountId);
+
+  // Keep accountId valid for the chosen currency. Prefer the globally active one when it matches.
+  useEffect(() => {
+    if (selectedAccount) return;
+    const preferred = currencyAccounts.find(a => a.id === activeAccountId) ?? currencyAccounts[0];
+    setAccountId(preferred ? preferred.id : '');
+  }, [currency, currencyAccounts, activeAccountId, selectedAccount]);
 
   const doAdd = async (overspendReason?: string) => {
     const amt = parseFloat(amount);
@@ -42,21 +60,38 @@ export function AddTransactionScreen() {
       date: format(new Date(), 'yyyy-MM-dd'),
       fixed: recurring,
       overspendReason: overspendReason ?? '',
+      currency,
+      accountId,
     });
     setLoading(false);
     navigation.goBack();
   };
 
+  const openCreateCategory = () => {
+    navigation.navigate('AddCategory', {
+      type,
+      onCreated: (created: { id: string }) => { setCategory(created.id); setShowAllCats(false); },
+    });
+  };
+
+  const openCreateAccount = () => {
+    navigation.navigate('AddAccount', {
+      currency,
+      onCreated: (created: { id: string }) => { setAccountId(created.id); setShowAccounts(false); },
+    });
+  };
+
   const handleSave = async () => {
     const amt = parseFloat(amount);
     if (!amount || isNaN(amt) || amt <= 0) { Alert.alert('Enter a valid amount'); return; }
+    if (!accountId) { Alert.alert('Pick an account', `Add an account in ${currency} first.`); return; }
 
     if (type === 'expense') {
       const monthKey = getMonthKey(new Date());
-      const budget = budgets.find(b => b.category === category && b.month === monthKey);
+      const budget = budgets.find(b => b.category === category && b.month === monthKey && b.currency === currency);
       if (budget) {
         const spent = transactions
-          .filter(t => t.type === 'expense' && t.category === category && t.date.startsWith(monthKey))
+          .filter(t => t.type === 'expense' && t.category === category && t.currency === currency && t.date.startsWith(monthKey))
           .reduce((s, t) => s + t.amount, 0);
         if (spent + amt > budget.limit) {
           const over = formatCurrency(spent + amt - budget.limit, currency);
@@ -90,9 +125,15 @@ export function AddTransactionScreen() {
 
         {/* ── Amount Card ── */}
         <View style={styles.amountCard}>
-          <Text style={styles.amountLabel}>Amount ({currency})</Text>
+          <View style={styles.amountLabelRow}>
+            <Text style={styles.amountLabel}>Amount</Text>
+            <TouchableOpacity style={styles.currencyChip} onPress={() => setShowCurrencies(v => !v)}>
+              <Text style={styles.currencyChipText}>💼 {currency}</Text>
+              <Text style={styles.currencyChipChevron}>{showCurrencies ? '∨' : '›'}</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.amountRow}>
-            <Text style={styles.amountPrefix}>Rs.</Text>
+            <Text style={styles.amountPrefix}>{symbol}</Text>
             <TextInput
               style={styles.amountInput}
               value={amount}
@@ -102,6 +143,21 @@ export function AddTransactionScreen() {
               placeholderTextColor={Colors.textTertiary}
             />
           </View>
+          {showCurrencies && (
+            <View style={styles.currencyOptions}>
+              {currencies.map(c => (
+                <TouchableOpacity
+                  key={c.code}
+                  style={[styles.currencyOption, currency === c.code && styles.currencyOptionActive]}
+                  onPress={() => { setCurrency(c.code); setShowCurrencies(false); }}
+                >
+                  <Text style={[styles.currencyOptionText, currency === c.code && styles.currencyOptionTextActive]}>
+                    {c.code} · {c.symbol}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* ── Expense / Income Toggle ── */}
@@ -143,6 +199,51 @@ export function AddTransactionScreen() {
                   <Text style={[styles.catChipText, category === c.id && styles.catChipTextActive]} numberOfLines={1}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity style={[styles.catChip, styles.catChipNew]} onPress={openCreateCategory}>
+                <Text style={styles.catChipEmoji}>➕</Text>
+                <Text style={[styles.catChipText, styles.catChipNewText]} numberOfLines={1}>New</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={styles.divider} />
+
+          {/* Account */}
+          <TouchableOpacity style={styles.fieldRow} onPress={() => setShowAccounts(v => !v)}>
+            <Text style={styles.fieldLabel}>{type === 'income' ? 'Deposit to 🏦' : 'Pay from 🏦'}</Text>
+            <View style={styles.fieldValueRow}>
+              {selectedAccount ? (
+                <>
+                  <Text style={styles.fieldEmoji}>{selectedAccount.emoji}</Text>
+                  <Text style={styles.fieldValue} numberOfLines={1}>
+                    {selectedAccount.name}{selectedAccount.bank ? ` · ${selectedAccount.bank}` : ''}
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.fieldValue, { color: Colors.textTertiary }]}>None</Text>
+              )}
+              <Text style={styles.fieldChevron}>{showAccounts ? '∨' : '›'}</Text>
+            </View>
+          </TouchableOpacity>
+
+          {showAccounts && (
+            <View style={styles.catGrid}>
+              {currencyAccounts.map(a => (
+                <TouchableOpacity
+                  key={a.id}
+                  style={[styles.catChip, accountId === a.id && styles.catChipActive]}
+                  onPress={() => { setAccountId(a.id); setShowAccounts(false); }}
+                >
+                  <Text style={styles.catChipEmoji}>{a.emoji}</Text>
+                  <Text style={[styles.catChipText, accountId === a.id && styles.catChipTextActive]} numberOfLines={1}>
+                    {a.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={[styles.catChip, styles.catChipNew]} onPress={openCreateAccount}>
+                <Text style={styles.catChipEmoji}>➕</Text>
+                <Text style={[styles.catChipText, styles.catChipNewText]} numberOfLines={1}>New</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -184,6 +285,10 @@ export function AddTransactionScreen() {
                   <Text style={[styles.quickText, category === c.id && styles.quickTextActive]}>{c.name.split(' ')[0]}</Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity style={[styles.quickChip, styles.quickChipNew]} onPress={openCreateCategory}>
+                <Text style={styles.quickEmoji}>➕</Text>
+                <Text style={[styles.quickText, styles.quickChipNewText]}>New</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -236,10 +341,19 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.card, borderRadius: Theme.radius.lg,
     padding: Theme.spacing.lg, marginBottom: Theme.spacing.md, ...Theme.shadow.card,
   },
-  amountLabel: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6 },
+  amountLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  amountLabel: { fontSize: Theme.fontSize.xs, color: Colors.textSecondary, fontWeight: '600' },
   amountRow: { flexDirection: 'row', alignItems: 'center' },
   amountPrefix: { fontSize: Theme.fontSize.xl, fontWeight: '700', color: Colors.textSecondary, marginRight: 8 },
   amountInput: { flex: 1, fontSize: 36, fontWeight: '300', color: Colors.textPrimary, letterSpacing: -0.5 },
+  currencyChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: Theme.radius.full, backgroundColor: Colors.cardSubtle },
+  currencyChipText: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textPrimary, letterSpacing: 0.3 },
+  currencyChipChevron: { fontSize: 12, color: Colors.textTertiary },
+  currencyOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: Theme.spacing.md },
+  currencyOption: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: Theme.radius.full, backgroundColor: Colors.cardSubtle, borderWidth: 1.5, borderColor: 'transparent' },
+  currencyOptionActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
+  currencyOptionText: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: Colors.textSecondary },
+  currencyOptionTextActive: { color: Colors.primary },
 
   // Type toggle
   typeRow: {
@@ -266,6 +380,8 @@ const styles = StyleSheet.create({
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: Theme.spacing.md, paddingTop: 0 },
   catChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: Theme.radius.full, backgroundColor: Colors.cardSubtle, borderWidth: 1.5, borderColor: 'transparent' },
   catChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
+  catChipNew: { borderStyle: 'dashed', borderColor: Colors.primary, backgroundColor: 'transparent' },
+  catChipNewText: { color: Colors.primary },
   catChipEmoji: { fontSize: 14 },
   catChipText: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary },
   catChipTextActive: { color: Colors.primary },
@@ -276,6 +392,8 @@ const styles = StyleSheet.create({
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quickChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Theme.radius.full, backgroundColor: Colors.card, ...Theme.shadow.card },
   quickChipActive: { backgroundColor: Colors.primary },
+  quickChipNew: { backgroundColor: 'transparent', borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.primary },
+  quickChipNewText: { color: Colors.primary },
   quickEmoji: { fontSize: 14 },
   quickText: { fontSize: Theme.fontSize.xs, fontWeight: '600', color: Colors.textSecondary },
   quickTextActive: { color: '#fff' },

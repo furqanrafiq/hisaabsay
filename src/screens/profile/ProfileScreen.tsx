@@ -4,6 +4,7 @@ import {
   Alert, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/context/AuthContext';
 import { useFinance } from '@/context/FinanceContext';
 import { Colors } from '@/constants/colors';
@@ -44,8 +45,12 @@ function SettingsRow({ emoji, label, subtitle, onPress, rightElement, showChevro
 }
 
 export function ProfileScreen() {
+  const navigation = useNavigation<any>();
   const { user, updateProfile, logout } = useAuth();
-  const { transactions, goals, budgets } = useFinance();
+  const { transactions, goals, budgets, activeCurrency, accounts } = useFinance();
+  const scopedTx = transactions.filter((t) => t.currency === activeCurrency);
+  const scopedGoals = goals.filter((g) => g.currency === activeCurrency);
+  const scopedBudgets = budgets.filter((b) => b.currency === activeCurrency);
 
   const [name, setName] = useState(user?.name ?? '');
   const [currency, setCurrency] = useState(user?.currency ?? 'PKR');
@@ -80,9 +85,9 @@ export function ProfileScreen() {
     try {
       const now = new Date();
       const monthKey = getMonthKey(now);
-      const { income, expense, balance } = getMonthlyTotals(transactions, monthKey);
+      const { income, expense, balance } = getMonthlyTotals(scopedTx, monthKey);
 
-      const txRows = transactions
+      const txRows = scopedTx
         .filter((t) => t.date.startsWith(monthKey))
         .map((t) => {
           const cat = getCategoryById(t.category);
@@ -92,16 +97,16 @@ export function ProfileScreen() {
             <td>${t.date}</td>
             <td>${cat.name}</td>
             <td>${t.note || '-'}</td>
-            <td style="color:${color};font-weight:700">${sign}${formatCurrency(t.amount, currency)}</td>
+            <td style="color:${color};font-weight:700">${sign}${formatCurrency(t.amount, activeCurrency)}</td>
           </tr>`;
         }).join('');
 
-      const goalRows = goals.map((g) => {
+      const goalRows = scopedGoals.map((g) => {
         const pct = g.targetAmount > 0 ? Math.round((g.savedAmount / g.targetAmount) * 100) : 0;
         return `<tr>
           <td>${g.emoji} ${g.name}</td>
-          <td>${formatCurrency(g.savedAmount, currency)}</td>
-          <td>${formatCurrency(g.targetAmount, currency)}</td>
+          <td>${formatCurrency(g.savedAmount, activeCurrency)}</td>
+          <td>${formatCurrency(g.targetAmount, activeCurrency)}</td>
           <td>${pct}%</td>
         </tr>`;
       }).join('');
@@ -121,16 +126,16 @@ export function ProfileScreen() {
           td { padding: 8px 12px; border-bottom: 1px solid #F1F5F9; }
         </style></head><body>
           <h1>HisaabSay Report</h1>
-          <div class="sub">${name} &nbsp;·&nbsp; ${formatMonthYear(now)}</div>
+          <div class="sub">${name} &nbsp;·&nbsp; ${formatMonthYear(now)} &nbsp;·&nbsp; ${activeCurrency}</div>
           <div class="summary">
-            <div class="card"><div class="card-label">Income</div><div class="card-value" style="color:#16A34A">${formatCurrency(income, currency)}</div></div>
-            <div class="card"><div class="card-label">Expenses</div><div class="card-value" style="color:#DC2626">${formatCurrency(expense, currency)}</div></div>
-            <div class="card"><div class="card-label">Balance</div><div class="card-value">${formatCurrency(balance, currency)}</div></div>
+            <div class="card"><div class="card-label">Income</div><div class="card-value" style="color:#16A34A">${formatCurrency(income, activeCurrency)}</div></div>
+            <div class="card"><div class="card-label">Expenses</div><div class="card-value" style="color:#DC2626">${formatCurrency(expense, activeCurrency)}</div></div>
+            <div class="card"><div class="card-label">Balance</div><div class="card-value">${formatCurrency(balance, activeCurrency)}</div></div>
           </div>
           <h2>Transactions</h2>
           <table><thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Amount</th></tr></thead>
           <tbody>${txRows || '<tr><td colspan="4" style="color:#94A3B8;text-align:center">No transactions this month</td></tr>'}</tbody></table>
-          ${goals.length > 0 ? `<h2>Savings Goals</h2>
+          ${scopedGoals.length > 0 ? `<h2>Savings Goals</h2>
           <table><thead><tr><th>Goal</th><th>Saved</th><th>Target</th><th>Progress</th></tr></thead>
           <tbody>${goalRows}</tbody></table>` : ''}
         </body></html>`;
@@ -152,12 +157,12 @@ export function ProfileScreen() {
   };
 
   const monthKey = getMonthKey(new Date());
-  const { expense } = getMonthlyTotals(transactions, monthKey);
-  const usageArr = getBudgetUsage(transactions, budgets, monthKey);
+  const { expense } = getMonthlyTotals(scopedTx, monthKey);
+  const usageArr = getBudgetUsage(scopedTx, scopedBudgets, monthKey);
   const totalLimit = usageArr.reduce((s, b) => s + b.limit, 0);
   const totalSpent = usageArr.reduce((s, b) => s + b.spent, 0);
   const budgetUsedPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0;
-  const activeGoals = goals.filter((g) => g.savedAmount < g.targetAmount).length;
+  const activeGoals = scopedGoals.filter((g) => g.savedAmount < g.targetAmount).length;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -186,7 +191,7 @@ export function ProfileScreen() {
         {/* ── Stats Row ── */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{formatCurrency(expense, currency)}</Text>
+            <Text style={styles.statValue}>{formatCurrency(expense, activeCurrency)}</Text>
             <Text style={styles.statLabel}>Monthly Exp</Text>
           </View>
           <View style={styles.statDivider} />
@@ -215,6 +220,13 @@ export function ProfileScreen() {
             emoji="💱"
             label={`Default Currency: ${currency}`}
             onPress={() => setCurrencyVisible(true)}
+          />
+          <View style={styles.divider} />
+          <SettingsRow
+            emoji="🏦"
+            label="Bank Accounts"
+            subtitle={`${accounts.filter((a) => !a.archived).length} account(s)`}
+            onPress={() => navigation.navigate('Accounts')}
           />
         </View>
 

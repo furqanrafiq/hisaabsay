@@ -21,12 +21,22 @@ export function getHealthLabel(score: number): { label: string; color: string } 
   return { label: 'Poor', color: '#EF5350' };
 }
 
-export function getBudgetUsage(transactions: Transaction[], budgets: Budget[], monthKey: string) {
+export function getBudgetUsage(
+  transactions: Transaction[],
+  budgets: Budget[],
+  monthKey: string,
+) {
   return budgets
     .filter((b) => b.month === monthKey)
     .map((b) => {
       const spent = transactions
-        .filter((t) => t.type === 'expense' && t.category === b.category && t.date.startsWith(monthKey))
+        .filter((t) =>
+          t.type === 'expense'
+          && t.category === b.category
+          && t.currency === b.currency
+          && t.date.startsWith(monthKey)
+          && (!b.accountId || t.accountId === b.accountId),
+        )
         .reduce((s, t) => s + t.amount, 0);
       const pct = b.limit > 0 ? Math.round((spent / b.limit) * 100) : 0;
       return { ...b, spent, pct };

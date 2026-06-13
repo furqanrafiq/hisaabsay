@@ -1,14 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Transaction, Budget, Goal } from '@/types';
+import { Transaction, Budget, Goal, Currency, Account } from '@/types';
 import { Category } from '@/constants/categories';
 import { apiFetch } from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
+import { STORAGE_KEYS, loadData, saveData } from '@/services/storage';
+
+const DEFAULT_CURRENCY = 'PKR';
 
 interface FinanceContextType {
   transactions: Transaction[];
   budgets: Budget[];
   goals: Goal[];
   customCategories: Category[];
+  currencies: Currency[];
+  accounts: Account[];
+  activeCurrency: string;
+  setActiveCurrency: (code: string) => void;
+  activeAccountId: string | null;
+  setActiveAccountId: (id: string | null) => void;
   addTransaction: (t: Omit<Transaction, 'id' | 'createdAt'>) => Promise<void>;
   editTransaction: (id: string, patch: Partial<Transaction>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
@@ -19,8 +28,12 @@ interface FinanceContextType {
   editGoal: (id: string, patch: Partial<Goal>) => Promise<void>;
   deleteGoal: (id: string) => Promise<void>;
   addToGoal: (goalId: string, amount: number) => Promise<void>;
-  addCustomCategory: (c: Omit<Category, 'id'>) => Promise<void>;
+  addCustomCategory: (c: Omit<Category, 'id'>) => Promise<Category>;
   deleteCustomCategory: (id: string) => Promise<void>;
+  addAccount: (a: Omit<Account, 'id' | 'createdAt'>) => Promise<Account>;
+  editAccount: (id: string, patch: Partial<Account>) => Promise<Account>;
+  deleteAccount: (id: string) => Promise<void>;
+  reassignAccountTransactions: (fromId: string, toId: string) => Promise<void>;
 }
 
 const FinanceContext = createContext<FinanceContextType>(null!);
@@ -31,6 +44,10 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [customCategories, setCustomCategories] = useState<Category[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [activeCurrency, setActiveCurrencyState] = useState<string>(DEFAULT_CURRENCY);
+  const [activeAccountId, setActiveAccountIdState] = useState<string | null>(null);
 
   // useEffect(() => { logout(); }, []);
 
@@ -41,24 +58,55 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
         setBudgets([]);
         setGoals([]);
         setCustomCategories([]);
+        setCurrencies([]);
+        setAccounts([]);
+        setActiveCurrencyState(DEFAULT_CURRENCY);
+        setActiveAccountIdState(null);
         return;
       }
       try {
-        const [t, b, g, cc] = await Promise.all([
+        const [t, b, g, cc, cur, acc, savedCur, savedAcc] = await Promise.all([
           apiFetch<Transaction[]>('/transactions'),
           apiFetch<Budget[]>('/budgets'),
           apiFetch<Goal[]>('/goals'),
           apiFetch<Category[]>('/categories/custom'),
+          apiFetch<Currency[]>('/currencies'),
+          apiFetch<Account[]>('/accounts'),
+          loadData<string>(STORAGE_KEYS.ACTIVE_CURRENCY),
+          loadData<string>(STORAGE_KEYS.ACTIVE_ACCOUNT),
         ]);
         setTransactions(t ?? []);
         setBudgets(b ?? []);
         setGoals(g ?? []);
         setCustomCategories(cc ?? []);
+        setCurrencies(cur ?? []);
+        setAccounts(acc ?? []);
+        const valid = (cur ?? []).some((c) => c.code === savedCur);
+        const resolvedCurrency = valid && savedCur ? savedCur : DEFAULT_CURRENCY;
+        setActiveCurrencyState(resolvedCurrency);
+        const validAcc = savedAcc && (acc ?? []).some((a) => a.id === savedAcc && a.currency === resolvedCurrency);
+        setActiveAccountIdState(validAcc ? savedAcc! : null);
       } catch (e) {
         console.error('[FinanceContext] Failed to load data:', e);
       }
     })();
   }, [isAuthenticated]);
+
+  const setActiveCurrency = (code: string) => {
+    setActiveCurrencyState(code);
+    saveData(STORAGE_KEYS.ACTIVE_CURRENCY, code);
+    // Clear active account if it doesn't belong to the newly selected currency.
+    const stillValid = accounts.some((a) => a.id === activeAccountId && a.currency === code);
+    if (!stillValid) {
+      setActiveAccountIdState(null);
+      saveData(STORAGE_KEYS.ACTIVE_ACCOUNT, '');
+    }
+  };
+
+  const setActiveAccountId = (id: string | null) => {
+    setActiveAccountIdState(id);
+    saveData(STORAGE_KEYS.ACTIVE_ACCOUNT, id ?? '');
+  };
 
   const addTransaction = async (t: Omit<Transaction, 'id' | 'createdAt'>) => {
     const created = await apiFetch<Transaction>('/transactions', { method: 'POST', body: JSON.stringify(t) });
@@ -113,6 +161,7 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
   const addCustomCategory = async (c: Omit<Category, 'id'>) => {
     const created = await apiFetch<Category>('/categories/custom', { method: 'POST', body: JSON.stringify(c) });
     setCustomCategories((prev) => [...prev, created]);
+    return created;
   };
 
   const deleteCustomCategory = async (id: string) => {
@@ -120,14 +169,44 @@ export function FinanceProvider({ children }: { children: React.ReactNode }) {
     setCustomCategories((prev) => prev.filter((c) => c.id !== id));
   };
 
+  const addAccount = async (a: Omit<Account, 'id' | 'createdAt'>) => {
+    const created = await apiFetch<Account>('/accounts', { method: 'POST', body: JSON.stringify(a) });
+    setAccounts((prev) => [...prev, created]);
+    return created;
+  };
+
+  const editAccount = async (id: string, patch: Partial<Account>) => {
+    const updated = await apiFetch<Account>(`/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    setAccounts((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    return updated;
+  };
+
+  const deleteAccount = async (id: string) => {
+    await apiFetch<void>(`/accounts/${id}`, { method: 'DELETE' });
+    setAccounts((prev) => prev.filter((a) => a.id !== id));
+    if (activeAccountId === id) setActiveAccountId(null);
+  };
+
+  const reassignAccountTransactions = async (fromId: string, toId: string) => {
+    await apiFetch<{ status: string }>(`/accounts/${fromId}/reassign`, {
+      method: 'POST',
+      body: JSON.stringify({ toAccountId: toId }),
+    });
+    setTransactions((prev) => prev.map((t) => (t.accountId === fromId ? { ...t, accountId: toId } : t)));
+  };
+
   return (
     <FinanceContext.Provider
       value={{
         transactions, budgets, goals, customCategories,
+        currencies, accounts,
+        activeCurrency, setActiveCurrency,
+        activeAccountId, setActiveAccountId,
         addTransaction, editTransaction, deleteTransaction,
         addBudget, editBudget, deleteBudget,
         addGoal, editGoal, deleteGoal, addToGoal,
         addCustomCategory, deleteCustomCategory,
+        addAccount, editAccount, deleteAccount, reassignAccountTransactions,
       }}
     >
       {children}

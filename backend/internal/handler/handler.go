@@ -34,6 +34,9 @@ func (h *Handler) Routes() http.Handler {
 	protected.HandleFunc("/goals/", h.handleGoalByIDOrAction)
 	protected.HandleFunc("/categories/custom", h.handleCustomCategories)
 	protected.HandleFunc("/categories/custom/", h.handleCustomCategoryByID)
+	protected.HandleFunc("/currencies", h.handleCurrencies)
+	protected.HandleFunc("/accounts", h.handleAccounts)
+	protected.HandleFunc("/accounts/", h.handleAccountByID)
 
 	mux.Handle("/", middleware.RequireAuth(h.Auth, protected))
 	return httpx.WithJSONHeaders(mux)
@@ -450,6 +453,21 @@ func (h *Handler) handleCustomCategories(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// Currencies
+
+func (h *Handler) handleCurrencies(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		httpx.MethodNotAllowed(w)
+		return
+	}
+	list, err := h.Store.ListCurrencies(r.Context())
+	if err != nil {
+		httpx.WriteError(w, http.StatusInternalServerError, "failed to list currencies")
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, list)
+}
+
 func (h *Handler) handleCustomCategoryByID(w http.ResponseWriter, r *http.Request) {
 	uid, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -469,6 +487,144 @@ func (h *Handler) handleCustomCategoryByID(w http.ResponseWriter, r *http.Reques
 			return
 		} else if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, "failed to delete category")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusNoContent, nil)
+	default:
+		httpx.MethodNotAllowed(w)
+	}
+}
+
+// Accounts
+
+func (h *Handler) handleAccounts(w http.ResponseWriter, r *http.Request) {
+	uid, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		list, err := h.Store.ListAccounts(r.Context(), uid)
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to list accounts")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, list)
+	case http.MethodPost:
+		var req model.Account
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if strings.TrimSpace(req.Name) == "" {
+			httpx.WriteError(w, http.StatusBadRequest, "name is required")
+			return
+		}
+		created, err := h.Store.CreateAccount(r.Context(), uid, req)
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to create account")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusCreated, created)
+	default:
+		httpx.MethodNotAllowed(w)
+	}
+}
+
+func (h *Handler) handleAccountByID(w http.ResponseWriter, r *http.Request) {
+	uid, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	rest := strings.TrimPrefix(r.URL.Path, "/accounts/")
+	if rest == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "missing id")
+		return
+	}
+
+	// /accounts/{id}/reassign  (POST { toAccountId })
+	if strings.HasSuffix(rest, "/reassign") {
+		id := strings.TrimSuffix(rest, "/reassign")
+		id = strings.TrimSuffix(id, "/")
+		if id == "" {
+			httpx.WriteError(w, http.StatusBadRequest, "missing id")
+			return
+		}
+		if r.Method != http.MethodPost {
+			httpx.MethodNotAllowed(w)
+			return
+		}
+		var req struct {
+			ToAccountID string `json:"toAccountId"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.ToAccountID) == "" {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		if req.ToAccountID == id {
+			httpx.WriteError(w, http.StatusBadRequest, "cannot reassign to same account")
+			return
+		}
+		if err := h.Store.ReassignAccountTransactions(r.Context(), uid, id, req.ToAccountID); err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to reassign transactions")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		return
+	}
+
+	id := strings.Trim(rest, "/")
+	if id == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "missing id")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		a, err := h.Store.GetAccount(r.Context(), uid, id)
+		if err == store.ErrNotFound {
+			httpx.WriteError(w, http.StatusNotFound, "account not found")
+			return
+		}
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to load account")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, a)
+	case http.MethodPut, http.MethodPatch:
+		var patch map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+		updated, err := h.Store.UpdateAccount(r.Context(), uid, id, patch)
+		if err == store.ErrNotFound {
+			httpx.WriteError(w, http.StatusNotFound, "account not found")
+			return
+		}
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to update account")
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, updated)
+	case http.MethodDelete:
+		n, err := h.Store.CountAccountTransactions(r.Context(), uid, id)
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to check account usage")
+			return
+		}
+		if n > 0 {
+			httpx.WriteError(w, http.StatusConflict, "account has transactions; reassign first")
+			return
+		}
+		if err := h.Store.DeleteAccount(r.Context(), uid, id); err == store.ErrNotFound {
+			httpx.WriteError(w, http.StatusNotFound, "account not found")
+			return
+		} else if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, "failed to delete account")
 			return
 		}
 		httpx.WriteJSON(w, http.StatusNoContent, nil)

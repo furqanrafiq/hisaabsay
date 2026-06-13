@@ -14,7 +14,7 @@ const PRIORITIES = ['Low', 'Medium', 'High'];
 
 export function AddGoalScreen() {
   const navigation = useNavigation<any>();
-  const { addGoal } = useFinance();
+  const { addGoal, activeCurrency } = useFinance();
 
   const [emoji, setEmoji] = useState('🎯');
   const [name, setName] = useState('');
@@ -41,6 +41,7 @@ export function AddGoalScreen() {
       deadline: deadline.trim(),
       emoji,
       monthlyContribution: monthlyAmt,
+      currency: activeCurrency,
     });
     setLoading(false);
     navigation.goBack();

@@ -12,6 +12,8 @@ import { BudgetDetailScreen } from '@/screens/budget/BudgetDetailScreen';
 import { AddGoalScreen } from '@/screens/goals/AddGoalScreen';
 import { GoalDetailScreen } from '@/screens/goals/GoalDetailScreen';
 import { AddCategoryScreen } from '@/screens/categories/AddCategoryScreen';
+import { AccountsScreen } from '@/screens/accounts/AccountsScreen';
+import { AddAccountScreen } from '@/screens/accounts/AddAccountScreen';
 import { Colors } from '@/constants/colors';
 
 const Stack = createNativeStackNavigator();
@@ -39,6 +41,8 @@ export function RootNavigator() {
           <Stack.Screen name="AddGoal" component={AddGoalScreen} options={{ presentation: 'modal' }} />
           <Stack.Screen name="GoalDetail" component={GoalDetailScreen} options={{ presentation: 'card' }} />
           <Stack.Screen name="AddCategory" component={AddCategoryScreen} options={{ presentation: 'modal' }} />
+          <Stack.Screen name="Accounts" component={AccountsScreen} options={{ presentation: 'card' }} />
+          <Stack.Screen name="AddAccount" component={AddAccountScreen} options={{ presentation: 'modal' }} />
         </Stack.Navigator>
       ) : (
         <AuthStack />

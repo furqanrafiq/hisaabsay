@@ -1,0 +1,12 @@
+
+LocalAddress  LocalPort       State OwningProcess
+------------  ---------       ----- -------------
+::1                8080 Established         13804
+::                 8080      Listen         13804
+192.168.1.103      8080 Established         13804
+192.168.1.103      8080 Established         13804
+192.168.1.103      8080 Established         13804
+192.168.1.103      8080 Established         13804
+
+
+

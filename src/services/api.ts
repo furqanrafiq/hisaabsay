@@ -3,7 +3,7 @@ import { getAuthToken } from './token';
 // IMPORTANT:
 // - If you run the backend on your computer and the app on a physical phone,
 //   "localhost" will NOT work. Use your machine's LAN IP (e.g. http://192.168.1.10:8080).
-export const API_BASE_URL = 'http://192.168.1.104:8080';
+export const API_BASE_URL = 'http://192.168.1.103:8080';
 
 type ApiError = Error & { status?: number };
 

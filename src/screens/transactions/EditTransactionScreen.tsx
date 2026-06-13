@@ -29,10 +29,10 @@ function DetailRow({ emoji, label, value }: { emoji: string; label: string; valu
 export function EditTransactionScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { editTransaction, deleteTransaction, addTransaction, customCategories } = useFinance();
+  const { editTransaction, deleteTransaction, addTransaction, customCategories, accounts } = useFinance();
   const { user } = useAuth();
   const t: Transaction = route.params.transaction;
-  const currency = user?.currency ?? 'PKR';
+  const currency = t.currency || 'PKR';
 
   const [editMode, setEditMode] = useState(false);
   const [amount, setAmount] = useState(String(t.amount));
@@ -43,6 +43,8 @@ export function EditTransactionScreen() {
   const cat = getCategoryById(t.category);
   const allCats = [...CATEGORIES.filter(c => c.type === t.type || c.type === 'both'), ...customCategories.filter(c => c.type === t.type || c.type === 'both')];
   const editCat = allCats.find(c => c.id === category) ?? cat;
+  const account = accounts.find(a => a.id === t.accountId);
+  const accountLabel = account ? `${account.emoji} ${account.name}${account.bank ? ` · ${account.bank}` : ''}` : '—';
 
   const formattedDate = (() => {
     try { return format(new Date(t.date), 'd MMMM yyyy'); } catch { return t.date; }
@@ -66,7 +68,7 @@ export function EditTransactionScreen() {
   };
 
   const handleDuplicate = async () => {
-    await addTransaction({ type: t.type, amount: t.amount, category: t.category, note: t.note, date: t.date, fixed: t.fixed, overspendReason: '' });
+    await addTransaction({ type: t.type, amount: t.amount, category: t.category, note: t.note, date: t.date, fixed: t.fixed, overspendReason: '', currency: t.currency, accountId: t.accountId });
     Alert.alert('Duplicated', 'Transaction has been duplicated.');
     navigation.goBack();
   };
@@ -112,6 +114,8 @@ export function EditTransactionScreen() {
               <DetailRow emoji="📅" label="Date" value={formattedDate} />
               <View style={styles.divider} />
               <DetailRow emoji="🏷️" label="Category" value={cat.name} />
+              <View style={styles.divider} />
+              <DetailRow emoji="🏦" label={t.type === 'income' ? 'Deposit to' : 'Pay from'} value={accountLabel} />
               <View style={styles.divider} />
               <DetailRow emoji="🔄" label="Type" value={t.fixed ? 'Fixed' : 'Variable'} />
               <View style={styles.divider} />

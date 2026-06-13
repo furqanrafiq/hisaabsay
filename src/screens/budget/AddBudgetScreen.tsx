@@ -12,14 +12,25 @@ import { Theme } from '@/constants/theme';
 export function AddBudgetScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { addBudget, editBudget, budgets } = useFinance();
+  const { addBudget, editBudget, budgets, accounts, activeCurrency, activeAccountId } = useFinance();
 
   const monthKey = route.params?.monthKey ?? new Date().toISOString().slice(0, 7);
-  const editingBudget: { id: string; category: string; limit: number } | undefined = route.params?.budget;
+  const editingBudget: { id: string; category: string; limit: number; accountId?: string; currency?: string } | undefined = route.params?.budget;
   const isEditing = !!editingBudget;
 
+  // A new budget inherits the active wallet scope; editing keeps the existing scope.
+  const scopeAccountId = isEditing ? (editingBudget?.accountId ?? '') : (activeAccountId ?? '');
+  const scopeCurrency = isEditing ? (editingBudget?.currency ?? activeCurrency) : activeCurrency;
+  const scopeAccount = scopeAccountId ? accounts.find((a) => a.id === scopeAccountId) : null;
+  const scopeLabel = scopeAccount ? `${scopeAccount.emoji} ${scopeAccount.name}` : `💼 All ${scopeCurrency}`;
+
   const existingCatIds = budgets
-    .filter(b => b.month === monthKey && b.id !== editingBudget?.id)
+    .filter(b =>
+      b.month === monthKey
+      && b.currency === scopeCurrency
+      && (b.accountId ?? '') === scopeAccountId
+      && b.id !== editingBudget?.id,
+    )
     .map(b => b.category);
 
   const expenseCats = CATEGORIES.filter(c => c.type === 'expense' || c.type === 'both');
@@ -46,7 +57,7 @@ export function AddBudgetScreen() {
     if (isEditing) {
       await editBudget(editingBudget.id, { limit: amt });
     } else {
-      await addBudget({ category, limit: amt, month: monthKey });
+      await addBudget({ category, limit: amt, month: monthKey, currency: scopeCurrency, accountId: scopeAccountId });
     }
     setLoading(false);
     navigation.goBack();
@@ -68,6 +79,12 @@ export function AddBudgetScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
+        {/* ── Scope chip ── */}
+        <View style={styles.scopeChip}>
+          <Text style={styles.scopeChipLabel}>Scope</Text>
+          <Text style={styles.scopeChipValue} numberOfLines={1}>{scopeLabel}</Text>
+        </View>
 
         {/* ── Category Grid ── */}
         {!isEditing ? (
@@ -206,6 +223,16 @@ const styles = StyleSheet.create({
 
   content: { padding: Theme.spacing.lg, paddingBottom: 40 },
   sectionLabel: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textPrimary, marginBottom: Theme.spacing.sm },
+
+  // Scope
+  scopeChip: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+    backgroundColor: Colors.card, borderRadius: Theme.radius.lg,
+    paddingHorizontal: Theme.spacing.md, paddingVertical: 12,
+    marginBottom: Theme.spacing.md, ...Theme.shadow.card,
+  },
+  scopeChipLabel: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  scopeChipValue: { flex: 1, textAlign: 'right', fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textPrimary },
 
   // Category grid
   catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: Theme.spacing.lg },

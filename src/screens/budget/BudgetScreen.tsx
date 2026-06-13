@@ -9,6 +9,7 @@ import { Theme } from '@/constants/theme';
 import { BudgetCategoryRow } from '@/components/budget/BudgetCategoryRow';
 import { EmptyState } from '@/components/common/EmptyState';
 import { DonutChart, DonutSlice } from '@/components/common/DonutChart';
+import { AccountSwitcher } from '@/components/common/AccountSwitcher';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getBudgetUsage } from '@/utils/calculations';
 import { getMonthKey, formatMonthYear } from '@/utils/formatDate';
@@ -18,11 +19,21 @@ import { addMonths, subMonths } from 'date-fns';
 export function BudgetScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { budgets, transactions, deleteBudget } = useFinance();
+  const {
+    budgets, transactions, deleteBudget,
+    currencies, accounts,
+    activeCurrency, setActiveCurrency,
+    activeAccountId, setActiveAccountId,
+  } = useFinance();
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const currency = user?.currency ?? 'PKR';
+  const currency = activeCurrency;
   const monthKey = getMonthKey(currentMonth);
-  const usage = getBudgetUsage(transactions, budgets, monthKey);
+  // When an account is active, show budgets scoped to that account.
+  // When viewing the aggregate currency, show currency-wide budgets (accountId == '').
+  const scopedBudgets = budgets.filter((b) =>
+    activeAccountId ? b.accountId === activeAccountId : (b.currency === currency && !b.accountId),
+  );
+  const usage = getBudgetUsage(transactions, scopedBudgets, monthKey);
   const totalLimit = usage.reduce((s, b) => s + b.limit, 0);
   const totalSpent = usage.reduce((s, b) => s + b.spent, 0);
   const usedPct = totalLimit > 0 ? Math.round((totalSpent / totalLimit) * 100) : 0;
@@ -49,10 +60,18 @@ export function BudgetScreen() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Budget 📊</Text>
-          <Text style={styles.subtitle}>{formatMonthYear(currentMonth)}</Text>
-        </View>
+        <Text style={styles.title}>Budget 📊</Text>
+        <AccountSwitcher
+          currencies={currencies}
+          accounts={accounts}
+          activeCurrency={activeCurrency}
+          activeAccountId={activeAccountId}
+          onSelect={(cur, id) => { setActiveCurrency(cur); setActiveAccountId(id); }}
+          onManage={() => navigation.navigate('Accounts')}
+        />
+      </View>
+      <View style={styles.monthRow}>
+        <Text style={styles.subtitle}>{formatMonthYear(currentMonth)}</Text>
         <View style={styles.monthNav}>
           <TouchableOpacity onPress={() => setCurrentMonth((m) => subMonths(m, 1))} style={styles.navBtn}>
             <Text style={styles.navArrow}>‹</Text>
@@ -123,7 +142,7 @@ export function BudgetScreen() {
                 style={styles.actionBtn}
                 onPress={() => navigation.navigate('AddBudget', {
                   monthKey,
-                  budget: { id: item.id, category: item.category, limit: item.limit },
+                  budget: { id: item.id, category: item.category, limit: item.limit, currency: item.currency, accountId: item.accountId },
                 })}
               >
                 <Text style={styles.actionEdit}>✏️ Edit</Text>
@@ -151,9 +170,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Theme.spacing.lg, paddingTop: Theme.spacing.md, paddingBottom: Theme.spacing.sm },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Theme.spacing.lg, paddingTop: Theme.spacing.md, paddingBottom: 0 },
   title: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3 },
-  subtitle: { fontSize: Theme.fontSize.sm, color: Colors.textTertiary, marginTop: 2 },
+  subtitle: { fontSize: Theme.fontSize.sm, color: Colors.textTertiary },
+  monthRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Theme.spacing.lg, paddingBottom: Theme.spacing.sm },
   monthNav: { flexDirection: 'row', gap: 4 },
   navBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: Colors.card, alignItems: 'center', justifyContent: 'center', ...Theme.shadow.card },
   navArrow: { fontSize: 20, color: Colors.primary, fontWeight: '500', lineHeight: 22 },

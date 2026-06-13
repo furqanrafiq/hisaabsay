@@ -51,7 +51,7 @@ export function MainTabs() {
       })}
     >
       <Tab.Screen name="Home"     component={HomeScreen}         options={{ title: 'Home' }} />
-      <Tab.Screen name="Transact" component={TransactionsScreen} options={{ title: 'Transact' }} />
+      <Tab.Screen name="Transact" component={TransactionsScreen} options={{ title: 'Transactions' }} />
       <Tab.Screen name="Budget"   component={BudgetScreen}       options={{ title: 'Budget' }} />
       <Tab.Screen name="Goals"    component={GoalsScreen}        options={{ title: 'Goals' }} />
       <Tab.Screen name="Profile"  component={ProfileScreen}      options={{ title: 'Profile' }} />

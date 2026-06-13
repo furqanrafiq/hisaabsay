@@ -51,6 +51,11 @@ func (s *Store) EnsureUserByPhone(ctx context.Context, phone string) (userID str
 		); err != nil {
 			return "", model.UserProfile{}, err
 		}
+		if _, err := s.CreateAccount(ctx, uid, model.Account{
+			Name: "Default " + p.Currency, Currency: p.Currency,
+		}); err != nil {
+			return "", model.UserProfile{}, err
+		}
 		return uid, p, nil
 	}
 
@@ -99,7 +104,7 @@ func (s *Store) UpsertProfile(ctx context.Context, userID string, p model.UserPr
 
 func (s *Store) ListTransactions(ctx context.Context, userID string) ([]model.Transaction, error) {
 	rows, err := s.DB.SQL.QueryContext(ctx,
-		`SELECT id, type, amount, category, note, date, fixed, overspend_reason, created_at
+		`SELECT id, type, amount, category, note, date, fixed, overspend_reason, currency, account_id, created_at
 		 FROM transactions WHERE user_id = ? ORDER BY created_at DESC`,
 		userID,
 	)
@@ -112,7 +117,7 @@ func (s *Store) ListTransactions(ctx context.Context, userID string) ([]model.Tr
 	for rows.Next() {
 		var t model.Transaction
 		var fixed int
-		if err := rows.Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &fixed, &t.OverspendReason, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &fixed, &t.OverspendReason, &t.Currency, &t.AccountID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		t.Fixed = fixed != 0
@@ -128,10 +133,13 @@ func (s *Store) CreateTransaction(ctx context.Context, userID string, t model.Tr
 	if t.CreatedAt == "" {
 		t.CreatedAt = nowRFC3339()
 	}
+	if t.Currency == "" {
+		t.Currency = "PKR"
+	}
 	_, err := s.DB.SQL.ExecContext(ctx,
-		`INSERT INTO transactions (id, user_id, type, amount, category, note, date, fixed, overspend_reason, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.ID, userID, string(t.Type), t.Amount, t.Category, t.Note, t.Date, boolToInt(t.Fixed), t.OverspendReason, t.CreatedAt,
+		`INSERT INTO transactions (id, user_id, type, amount, category, note, date, fixed, overspend_reason, currency, account_id, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.ID, userID, string(t.Type), t.Amount, t.Category, t.Note, t.Date, boolToInt(t.Fixed), t.OverspendReason, t.Currency, t.AccountID, t.CreatedAt,
 	)
 	if err != nil {
 		return model.Transaction{}, err
@@ -165,9 +173,15 @@ func (s *Store) UpdateTransaction(ctx context.Context, userID, id string, patch 
 	if v, ok := patch["overspendReason"].(string); ok {
 		cur.OverspendReason = v
 	}
+	if v, ok := patch["currency"].(string); ok && v != "" {
+		cur.Currency = v
+	}
+	if v, ok := patch["accountId"].(string); ok {
+		cur.AccountID = v
+	}
 	_, err = s.DB.SQL.ExecContext(ctx,
-		`UPDATE transactions SET type=?, amount=?, category=?, note=?, date=?, fixed=?, overspend_reason=? WHERE user_id=? AND id=?`,
-		string(cur.Type), cur.Amount, cur.Category, cur.Note, cur.Date, boolToInt(cur.Fixed), cur.OverspendReason, userID, id,
+		`UPDATE transactions SET type=?, amount=?, category=?, note=?, date=?, fixed=?, overspend_reason=?, currency=?, account_id=? WHERE user_id=? AND id=?`,
+		string(cur.Type), cur.Amount, cur.Category, cur.Note, cur.Date, boolToInt(cur.Fixed), cur.OverspendReason, cur.Currency, cur.AccountID, userID, id,
 	)
 	if err != nil {
 		return model.Transaction{}, err
@@ -179,10 +193,10 @@ func (s *Store) GetTransaction(ctx context.Context, userID, txID string) (model.
 	var t model.Transaction
 	var fixed int
 	err := s.DB.SQL.QueryRowContext(ctx,
-		`SELECT id, type, amount, category, note, date, fixed, overspend_reason, created_at
+		`SELECT id, type, amount, category, note, date, fixed, overspend_reason, currency, account_id, created_at
 		 FROM transactions WHERE user_id = ? AND id = ?`,
 		userID, txID,
-	).Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &fixed, &t.OverspendReason, &t.CreatedAt)
+	).Scan(&t.ID, &t.Type, &t.Amount, &t.Category, &t.Note, &t.Date, &fixed, &t.OverspendReason, &t.Currency, &t.AccountID, &t.CreatedAt)
 	if err == sql.ErrNoRows {
 		return model.Transaction{}, ErrNotFound
 	}
@@ -209,7 +223,7 @@ func (s *Store) DeleteTransaction(ctx context.Context, userID, txID string) erro
 
 func (s *Store) ListBudgets(ctx context.Context, userID string) ([]model.Budget, error) {
 	rows, err := s.DB.SQL.QueryContext(ctx,
-		`SELECT id, category, limit_amount, month FROM budgets WHERE user_id = ?`,
+		`SELECT id, category, limit_amount, month, currency, account_id FROM budgets WHERE user_id = ?`,
 		userID,
 	)
 	if err != nil {
@@ -220,7 +234,7 @@ func (s *Store) ListBudgets(ctx context.Context, userID string) ([]model.Budget,
 	var out []model.Budget
 	for rows.Next() {
 		var b model.Budget
-		if err := rows.Scan(&b.ID, &b.Category, &b.Limit, &b.Month); err != nil {
+		if err := rows.Scan(&b.ID, &b.Category, &b.Limit, &b.Month, &b.Currency, &b.AccountID); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
@@ -232,9 +246,12 @@ func (s *Store) CreateBudget(ctx context.Context, userID string, b model.Budget)
 	if b.ID == "" {
 		b.ID = id.New("bdg")
 	}
+	if b.Currency == "" {
+		b.Currency = "PKR"
+	}
 	_, err := s.DB.SQL.ExecContext(ctx,
-		`INSERT INTO budgets (id, user_id, category, limit_amount, month) VALUES (?, ?, ?, ?, ?)`,
-		b.ID, userID, b.Category, b.Limit, b.Month,
+		`INSERT INTO budgets (id, user_id, category, limit_amount, month, currency, account_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		b.ID, userID, b.Category, b.Limit, b.Month, b.Currency, b.AccountID,
 	)
 	if err != nil {
 		return model.Budget{}, err
@@ -256,9 +273,15 @@ func (s *Store) UpdateBudget(ctx context.Context, userID, budgetID string, patch
 	if v, ok := patch["month"].(string); ok {
 		cur.Month = v
 	}
+	if v, ok := patch["currency"].(string); ok && v != "" {
+		cur.Currency = v
+	}
+	if v, ok := patch["accountId"].(string); ok {
+		cur.AccountID = v
+	}
 	_, err = s.DB.SQL.ExecContext(ctx,
-		`UPDATE budgets SET category=?, limit_amount=?, month=? WHERE user_id=? AND id=?`,
-		cur.Category, cur.Limit, cur.Month, userID, budgetID,
+		`UPDATE budgets SET category=?, limit_amount=?, month=?, currency=?, account_id=? WHERE user_id=? AND id=?`,
+		cur.Category, cur.Limit, cur.Month, cur.Currency, cur.AccountID, userID, budgetID,
 	)
 	if err != nil {
 		return model.Budget{}, err
@@ -269,9 +292,9 @@ func (s *Store) UpdateBudget(ctx context.Context, userID, budgetID string, patch
 func (s *Store) GetBudget(ctx context.Context, userID, budgetID string) (model.Budget, error) {
 	var b model.Budget
 	err := s.DB.SQL.QueryRowContext(ctx,
-		`SELECT id, category, limit_amount, month FROM budgets WHERE user_id=? AND id=?`,
+		`SELECT id, category, limit_amount, month, currency, account_id FROM budgets WHERE user_id=? AND id=?`,
 		userID, budgetID,
-	).Scan(&b.ID, &b.Category, &b.Limit, &b.Month)
+	).Scan(&b.ID, &b.Category, &b.Limit, &b.Month, &b.Currency, &b.AccountID)
 	if err == sql.ErrNoRows {
 		return model.Budget{}, ErrNotFound
 	}
@@ -297,7 +320,7 @@ func (s *Store) DeleteBudget(ctx context.Context, userID, budgetID string) error
 
 func (s *Store) ListGoals(ctx context.Context, userID string) ([]model.Goal, error) {
 	rows, err := s.DB.SQL.QueryContext(ctx,
-		`SELECT id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, created_at
+		`SELECT id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, currency, created_at
 		 FROM goals WHERE user_id = ? ORDER BY created_at DESC`,
 		userID,
 	)
@@ -309,7 +332,7 @@ func (s *Store) ListGoals(ctx context.Context, userID string) ([]model.Goal, err
 	var out []model.Goal
 	for rows.Next() {
 		var g model.Goal
-		if err := rows.Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.MonthlyContribution, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.MonthlyContribution, &g.Currency, &g.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, g)
@@ -324,10 +347,13 @@ func (s *Store) CreateGoal(ctx context.Context, userID string, g model.Goal) (mo
 	if g.CreatedAt == "" {
 		g.CreatedAt = nowRFC3339()
 	}
+	if g.Currency == "" {
+		g.Currency = "PKR"
+	}
 	_, err := s.DB.SQL.ExecContext(ctx,
-		`INSERT INTO goals (id, user_id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		g.ID, userID, g.Name, g.TargetAmount, g.SavedAmount, g.Deadline, g.Emoji, g.MonthlyContribution, g.CreatedAt,
+		`INSERT INTO goals (id, user_id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, currency, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		g.ID, userID, g.Name, g.TargetAmount, g.SavedAmount, g.Deadline, g.Emoji, g.MonthlyContribution, g.Currency, g.CreatedAt,
 	)
 	if err != nil {
 		return model.Goal{}, err
@@ -338,10 +364,10 @@ func (s *Store) CreateGoal(ctx context.Context, userID string, g model.Goal) (mo
 func (s *Store) GetGoal(ctx context.Context, userID, goalID string) (model.Goal, error) {
 	var g model.Goal
 	err := s.DB.SQL.QueryRowContext(ctx,
-		`SELECT id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, created_at
+		`SELECT id, name, target_amount, saved_amount, deadline, emoji, monthly_contribution, currency, created_at
 		 FROM goals WHERE user_id = ? AND id = ?`,
 		userID, goalID,
-	).Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.MonthlyContribution, &g.CreatedAt)
+	).Scan(&g.ID, &g.Name, &g.TargetAmount, &g.SavedAmount, &g.Deadline, &g.Emoji, &g.MonthlyContribution, &g.Currency, &g.CreatedAt)
 	if err == sql.ErrNoRows {
 		return model.Goal{}, ErrNotFound
 	}
@@ -374,9 +400,12 @@ func (s *Store) UpdateGoal(ctx context.Context, userID, goalID string, patch map
 	if v, ok := patch["monthlyContribution"].(float64); ok {
 		cur.MonthlyContribution = v
 	}
+	if v, ok := patch["currency"].(string); ok && v != "" {
+		cur.Currency = v
+	}
 	_, err = s.DB.SQL.ExecContext(ctx,
-		`UPDATE goals SET name=?, target_amount=?, saved_amount=?, deadline=?, emoji=?, monthly_contribution=? WHERE user_id=? AND id=?`,
-		cur.Name, cur.TargetAmount, cur.SavedAmount, cur.Deadline, cur.Emoji, cur.MonthlyContribution, userID, goalID,
+		`UPDATE goals SET name=?, target_amount=?, saved_amount=?, deadline=?, emoji=?, monthly_contribution=?, currency=? WHERE user_id=? AND id=?`,
+		cur.Name, cur.TargetAmount, cur.SavedAmount, cur.Deadline, cur.Emoji, cur.MonthlyContribution, cur.Currency, userID, goalID,
 	)
 	if err != nil {
 		return model.Goal{}, err
@@ -454,6 +483,167 @@ func (s *Store) CreateCustomCategory(ctx context.Context, userID string, c model
 
 func (s *Store) DeleteCustomCategory(ctx context.Context, userID, catID string) error {
 	res, err := s.DB.SQL.ExecContext(ctx, `DELETE FROM custom_categories WHERE user_id=? AND id=?`, userID, catID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Currencies
+
+func (s *Store) ListCurrencies(ctx context.Context) ([]model.Currency, error) {
+	rows, err := s.DB.SQL.QueryContext(ctx, `SELECT code, name, symbol FROM currencies ORDER BY code`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.Currency
+	for rows.Next() {
+		var c model.Currency
+		if err := rows.Scan(&c.Code, &c.Name, &c.Symbol); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// Accounts
+
+func (s *Store) ListAccounts(ctx context.Context, userID string) ([]model.Account, error) {
+	rows, err := s.DB.SQL.QueryContext(ctx,
+		`SELECT id, name, bank, currency, opening_balance, emoji, color, archived, created_at
+		 FROM accounts WHERE user_id = ? ORDER BY created_at ASC`,
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.Account
+	for rows.Next() {
+		var a model.Account
+		var archived int
+		if err := rows.Scan(&a.ID, &a.Name, &a.Bank, &a.Currency, &a.OpeningBalance, &a.Emoji, &a.Color, &archived, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		a.Archived = archived != 0
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) CreateAccount(ctx context.Context, userID string, a model.Account) (model.Account, error) {
+	if a.ID == "" {
+		a.ID = id.New("acc")
+	}
+	if a.CreatedAt == "" {
+		a.CreatedAt = nowRFC3339()
+	}
+	if a.Currency == "" {
+		a.Currency = "PKR"
+	}
+	if a.Emoji == "" {
+		a.Emoji = "🏦"
+	}
+	if a.Color == "" {
+		a.Color = "#1E293B"
+	}
+	_, err := s.DB.SQL.ExecContext(ctx,
+		`INSERT INTO accounts (id, user_id, name, bank, currency, opening_balance, emoji, color, archived, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, userID, a.Name, a.Bank, a.Currency, a.OpeningBalance, a.Emoji, a.Color, boolToInt(a.Archived), a.CreatedAt,
+	)
+	if err != nil {
+		return model.Account{}, err
+	}
+	return a, nil
+}
+
+func (s *Store) GetAccount(ctx context.Context, userID, accID string) (model.Account, error) {
+	var a model.Account
+	var archived int
+	err := s.DB.SQL.QueryRowContext(ctx,
+		`SELECT id, name, bank, currency, opening_balance, emoji, color, archived, created_at
+		 FROM accounts WHERE user_id = ? AND id = ?`,
+		userID, accID,
+	).Scan(&a.ID, &a.Name, &a.Bank, &a.Currency, &a.OpeningBalance, &a.Emoji, &a.Color, &archived, &a.CreatedAt)
+	if err == sql.ErrNoRows {
+		return model.Account{}, ErrNotFound
+	}
+	if err != nil {
+		return model.Account{}, err
+	}
+	a.Archived = archived != 0
+	return a, nil
+}
+
+func (s *Store) UpdateAccount(ctx context.Context, userID, accID string, patch map[string]interface{}) (model.Account, error) {
+	cur, err := s.GetAccount(ctx, userID, accID)
+	if err != nil {
+		return model.Account{}, err
+	}
+	if v, ok := patch["name"].(string); ok {
+		cur.Name = v
+	}
+	if v, ok := patch["bank"].(string); ok {
+		cur.Bank = v
+	}
+	if v, ok := patch["currency"].(string); ok && v != "" {
+		cur.Currency = v
+	}
+	if v, ok := patch["openingBalance"].(float64); ok {
+		cur.OpeningBalance = v
+	}
+	if v, ok := patch["emoji"].(string); ok && v != "" {
+		cur.Emoji = v
+	}
+	if v, ok := patch["color"].(string); ok && v != "" {
+		cur.Color = v
+	}
+	if v, ok := patch["archived"].(bool); ok {
+		cur.Archived = v
+	}
+	_, err = s.DB.SQL.ExecContext(ctx,
+		`UPDATE accounts SET name=?, bank=?, currency=?, opening_balance=?, emoji=?, color=?, archived=? WHERE user_id=? AND id=?`,
+		cur.Name, cur.Bank, cur.Currency, cur.OpeningBalance, cur.Emoji, cur.Color, boolToInt(cur.Archived), userID, accID,
+	)
+	if err != nil {
+		return model.Account{}, err
+	}
+	return cur, nil
+}
+
+// CountAccountTransactions returns the number of transactions linked to an account.
+func (s *Store) CountAccountTransactions(ctx context.Context, userID, accID string) (int, error) {
+	var n int
+	err := s.DB.SQL.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM transactions WHERE user_id = ? AND account_id = ?`,
+		userID, accID,
+	).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// ReassignAccountTransactions moves transactions from one account to another.
+func (s *Store) ReassignAccountTransactions(ctx context.Context, userID, fromID, toID string) error {
+	_, err := s.DB.SQL.ExecContext(ctx,
+		`UPDATE transactions SET account_id = ? WHERE user_id = ? AND account_id = ?`,
+		toID, userID, fromID,
+	)
+	return err
+}
+
+func (s *Store) DeleteAccount(ctx context.Context, userID, accID string) error {
+	res, err := s.DB.SQL.ExecContext(ctx, `DELETE FROM accounts WHERE user_id=? AND id=?`, userID, accID)
 	if err != nil {
 		return err
 	}

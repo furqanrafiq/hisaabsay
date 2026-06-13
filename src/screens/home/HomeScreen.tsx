@@ -11,6 +11,7 @@ import { TransactionItem } from '@/components/transactions/TransactionItem';
 import { EmptyState } from '@/components/common/EmptyState';
 import { DonutChart, DonutSlice } from '@/components/common/DonutChart';
 import { ProgressBar } from '@/components/common/ProgressBar';
+import { AccountSwitcher } from '@/components/common/AccountSwitcher';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getMonthlyTotals } from '@/utils/calculations';
 import { getMonthKey, formatMonthYear } from '@/utils/formatDate';
@@ -25,17 +26,43 @@ function getGreeting() {
 
 export function HomeScreen() {
   const { user } = useAuth();
-  const { transactions, goals, customCategories } = useFinance();
+  const {
+    transactions, goals, customCategories, currencies, accounts,
+    activeCurrency, setActiveCurrency, activeAccountId, setActiveAccountId,
+  } = useFinance();
   const navigation = useNavigation<any>();
 
   const now = new Date();
   const monthKey = getMonthKey(now);
-  const currency = user?.currency ?? 'PKR';
-  const { income, expense, balance } = getMonthlyTotals(transactions, monthKey);
-  const recent = transactions.slice(0, 5);
+  const currency = activeCurrency;
+  const activeAccount = accounts.find((a) => a.id === activeAccountId);
+  const scopedTx = activeAccount
+    ? transactions.filter((t) => t.accountId === activeAccount.id)
+    : transactions.filter((t) => t.currency === currency);
+  const scopedGoals = goals.filter((g) => g.currency === currency);
+  const { income, expense } = getMonthlyTotals(scopedTx, monthKey);
+
+  // All-time balance: opening + Σ income − Σ expense across scoped accounts.
+  const scopedAccounts = activeAccount
+    ? [activeAccount]
+    : accounts.filter((a) => a.currency === currency && !a.archived);
+  const openingTotal = scopedAccounts.reduce((s, a) => s + a.openingBalance, 0);
+  const flowTotal = scopedTx.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+  const balance = openingTotal + flowTotal;
+
+  const recent = scopedTx.slice(0, 5);
   const name = user?.name?.split(' ')[0] || 'there';
 
-  const monthlyExpenses = transactions.filter((t) => t.type === 'expense' && t.date.startsWith(monthKey));
+  // Per-account balances for the strip (always shown for active currency, regardless of selection).
+  const stripAccounts = accounts.filter((a) => a.currency === currency && !a.archived);
+  const accountBalances = stripAccounts.map((a) => {
+    const flow = transactions
+      .filter((t) => t.accountId === a.id)
+      .reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+    return { account: a, balance: a.openingBalance + flow };
+  });
+
+  const monthlyExpenses = scopedTx.filter((t) => t.type === 'expense' && t.date.startsWith(monthKey));
   const categoryTotals: Record<string, number> = {};
   monthlyExpenses.forEach((t) => {
     categoryTotals[t.category] = (categoryTotals[t.category] ?? 0) + t.amount;
@@ -56,7 +83,15 @@ export function HomeScreen() {
 
         {/* ── Header ── */}
         <View style={styles.header}>
-          <View>
+          <View style={{ flex: 1 }}>
+            <AccountSwitcher
+              currencies={currencies}
+              accounts={accounts}
+              activeCurrency={activeCurrency}
+              activeAccountId={activeAccountId}
+              onSelect={(cur, id) => { setActiveCurrency(cur); setActiveAccountId(id); }}
+              onManage={() => navigation.navigate('Accounts')}
+            />
             <Text style={styles.greeting}>{getGreeting()}, {name} 👋</Text>
             <Text style={styles.month}>{formatMonthYear(now)}</Text>
           </View>
@@ -80,6 +115,52 @@ export function HomeScreen() {
             {balance >= 0 ? '↑' : '↓'} {formatCurrency(Math.abs(income - expense), currency)} this month
           </Text>
         </LinearGradient>
+
+        {/* ── Accounts Strip ── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Accounts 🏦</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Accounts')}>
+              <Text style={styles.seeAll}>Manage →</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.acctStrip}>
+            <TouchableOpacity
+              style={[styles.acctCard, !activeAccountId && styles.acctCardActive]}
+              onPress={() => setActiveAccountId(null)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.acctEmoji}>💼</Text>
+              <Text style={styles.acctName} numberOfLines={1}>All {currency}</Text>
+              <Text style={styles.acctBalance}>{formatCurrency(balance, currency)}</Text>
+              <Text style={styles.acctMeta}>{stripAccounts.length} account(s)</Text>
+            </TouchableOpacity>
+            {accountBalances.map(({ account, balance: bal }) => {
+              const isActive = activeAccountId === account.id;
+              return (
+                <TouchableOpacity
+                  key={account.id}
+                  style={[styles.acctCard, isActive && styles.acctCardActive, { borderTopColor: account.color }]}
+                  onPress={() => setActiveAccountId(account.id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.acctEmoji}>{account.emoji}</Text>
+                  <Text style={styles.acctName} numberOfLines={1}>{account.name}</Text>
+                  <Text style={styles.acctBalance}>{formatCurrency(bal, currency)}</Text>
+                  <Text style={styles.acctMeta} numberOfLines={1}>{account.bank || '—'}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[styles.acctCard, styles.acctCardNew]}
+              onPress={() => navigation.navigate('AddAccount', { currency })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.acctNewIcon}>＋</Text>
+              <Text style={styles.acctNewLabel}>New Account</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
 
         {/* ── This Month ── */}
         <Text style={styles.sectionTitle}>This Month</Text>
@@ -127,7 +208,7 @@ export function HomeScreen() {
         )}
 
         {/* ── Goals ── */}
-        {goals.length > 0 && (
+        {scopedGoals.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Goals 🎯</Text>
@@ -135,7 +216,7 @@ export function HomeScreen() {
                 <Text style={styles.seeAll}>See all →</Text>
               </TouchableOpacity>
             </View>
-            {goals.slice(0, 2).map((g) => {
+            {scopedGoals.slice(0, 2).map((g) => {
               const pct = g.targetAmount > 0 ? Math.round((g.savedAmount / g.targetAmount) * 100) : 0;
               return (
                 <View key={g.id} style={[styles.card, styles.goalRow]}>
@@ -212,6 +293,26 @@ const styles = StyleSheet.create({
   activeBadgeText: { fontSize: Theme.fontSize.xs, color: '#fff', fontWeight: '700' },
   balanceAmount: { fontSize: Theme.fontSize.hero, fontWeight: '800', color: '#fff', letterSpacing: -1, marginBottom: 8 },
   balanceSub: { fontSize: Theme.fontSize.sm, color: 'rgba(255,255,255,0.65)' },
+
+  // Accounts strip
+  acctStrip: { gap: 10, paddingRight: 4 },
+  acctCard: {
+    width: 150, padding: Theme.spacing.md, borderRadius: Theme.radius.lg,
+    backgroundColor: Colors.card, borderWidth: 1.5, borderColor: 'transparent',
+    borderTopWidth: 3, borderTopColor: Colors.primary,
+    ...Theme.shadow.card,
+  },
+  acctCardActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryMuted },
+  acctCardNew: {
+    borderTopColor: 'transparent', borderColor: Colors.border, borderStyle: 'dashed',
+    backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center',
+  },
+  acctEmoji: { fontSize: 20, marginBottom: 6 },
+  acctName: { fontSize: Theme.fontSize.sm, fontWeight: '700', color: Colors.textPrimary },
+  acctBalance: { fontSize: Theme.fontSize.md, fontWeight: '800', color: Colors.textPrimary, letterSpacing: -0.3, marginTop: 6 },
+  acctMeta: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, marginTop: 2 },
+  acctNewIcon: { fontSize: 28, color: Colors.textTertiary, fontWeight: '300' },
+  acctNewLabel: { fontSize: Theme.fontSize.xs, color: Colors.textTertiary, fontWeight: '600', marginTop: 4 },
 
   // This Month
   thisMonthRow: { flexDirection: 'row', marginBottom: Theme.spacing.lg },

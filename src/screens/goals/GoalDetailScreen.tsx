@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFinance } from '@/context/FinanceContext';
-import { useAuth } from '@/context/AuthContext';
 import { Colors } from '@/constants/colors';
 import { Theme } from '@/constants/theme';
 import { Goal } from '@/types';
@@ -24,9 +23,8 @@ export function GoalDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { editGoal, deleteGoal, addToGoal } = useFinance();
-  const { user } = useAuth();
   const goal: Goal = route.params.goal;
-  const currency = user?.currency ?? 'PKR';
+  const currency = goal.currency || 'PKR';
 
   const [depositAmount, setDepositAmount] = useState('');
   const [showDeposit, setShowDeposit] = useState(false);

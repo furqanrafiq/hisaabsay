@@ -7,6 +7,8 @@ export const STORAGE_KEYS = {
   PROFILE: '@hisaabsay/profile',
   SESSION: '@hisaabsay/session',
   CUSTOM_CATEGORIES: '@hisaabsay/custom_categories',
+  ACTIVE_CURRENCY: '@hisaabsay/active_currency',
+  ACTIVE_ACCOUNT: '@hisaabsay/active_account',
 };
 
 export async function loadData<T>(key: string): Promise<T | null> {

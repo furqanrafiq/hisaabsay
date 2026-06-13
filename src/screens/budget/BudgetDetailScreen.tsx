@@ -19,11 +19,13 @@ export function BudgetDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { user } = useAuth();
-  const { transactions } = useFinance();
+  const { transactions, accounts } = useFinance();
 
-  const { budget, monthKey } = route.params as { budget: { id: string; category: string; limit: number; spent: number; pct: number }; monthKey: string };
-  const currency = user?.currency ?? 'PKR';
+  const { budget, monthKey } = route.params as { budget: { id: string; category: string; limit: number; spent: number; pct: number; currency: string; accountId: string }; monthKey: string };
+  const currency = budget.currency || 'PKR';
   const cat = getCategoryById(budget.category);
+  const scopeAccount = budget.accountId ? accounts.find((a) => a.id === budget.accountId) : null;
+  const scopeLabel = scopeAccount ? `${scopeAccount.emoji} ${scopeAccount.name}` : `💼 All ${currency}`;
 
   const now = new Date();
   const totalDays = getDaysInMonth(now);
@@ -35,7 +37,13 @@ export function BudgetDetailScreen() {
   const daysLeft = totalDays - elapsedDays;
 
   const monthTxns = transactions
-    .filter(t => t.type === 'expense' && t.category === budget.category && t.date.startsWith(monthKey))
+    .filter(t =>
+      t.type === 'expense'
+      && t.category === budget.category
+      && t.currency === currency
+      && t.date.startsWith(monthKey)
+      && (!budget.accountId || t.accountId === budget.accountId),
+    )
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const donutSlices = [
@@ -66,6 +74,7 @@ export function BudgetDetailScreen() {
         <LinearGradient colors={['#1E2B4A', '#3B6FE8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
           <View style={styles.heroLeft}>
             <Text style={styles.heroSubLabel}>Budget</Text>
+            <View style={styles.scopeBadge}><Text style={styles.scopeBadgeText} numberOfLines={1}>{scopeLabel}</Text></View>
             <Text style={styles.heroCategory}>{cat.name}</Text>
             <Text style={styles.heroAmounts}>
               {formatCurrency(budget.spent, currency)} / {formatCurrency(budget.limit, currency)}
@@ -142,7 +151,7 @@ export function BudgetDetailScreen() {
           activeOpacity={0.85}
           onPress={() => navigation.navigate('AddBudget', {
             monthKey,
-            budget: { id: budget.id, category: budget.category, limit: budget.limit },
+            budget: { id: budget.id, category: budget.category, limit: budget.limit, currency: budget.currency, accountId: budget.accountId },
           })}
         >
           <Text style={styles.editBtnText}>Edit Budget ✏️</Text>
@@ -174,6 +183,8 @@ const styles = StyleSheet.create({
   heroCard: { borderRadius: Theme.radius.xl, padding: Theme.spacing.lg, flexDirection: 'row', alignItems: 'center', marginBottom: Theme.spacing.md, ...Theme.shadow.elevated },
   heroLeft: { flex: 1 },
   heroSubLabel: { fontSize: Theme.fontSize.xs, color: 'rgba(255,255,255,0.65)', fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 4 },
+  scopeBadge: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginBottom: 6 },
+  scopeBadgeText: { fontSize: Theme.fontSize.xs, fontWeight: '700', color: '#fff' },
   heroCategory: { fontSize: Theme.fontSize.xl, fontWeight: '800', color: '#fff', marginBottom: 4 },
   heroAmounts: { fontSize: Theme.fontSize.sm, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
   heroRemaining: { fontSize: Theme.fontSize.sm, fontWeight: '700', marginBottom: 4 },

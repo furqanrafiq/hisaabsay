@@ -14,12 +14,13 @@ import { Goal } from '@/types';
 export function GoalsScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { goals, addToGoal, deleteGoal } = useFinance();
-  const currency = user?.currency ?? 'PKR';
+  const { goals, addToGoal, deleteGoal, activeCurrency } = useFinance();
+  const currency = activeCurrency;
 
-  const activeGoals = goals.filter((g) => g.savedAmount < g.targetAmount);
-  const completedGoals = goals.filter((g) => g.savedAmount >= g.targetAmount);
-  const totalSaved = goals.reduce((s, g) => s + g.savedAmount, 0);
+  const scopedGoals = goals.filter((g) => g.currency === currency);
+  const activeGoals = scopedGoals.filter((g) => g.savedAmount < g.targetAmount);
+  const completedGoals = scopedGoals.filter((g) => g.savedAmount >= g.targetAmount);
+  const totalSaved = scopedGoals.reduce((s, g) => s + g.savedAmount, 0);
 
   const handleAddFunds = (goal: Goal) => {
     Alert.prompt(
@@ -50,11 +51,11 @@ export function GoalsScreen() {
       </View>
 
       <FlatList
-        data={goals}
+        data={scopedGoals}
         keyExtractor={(g) => g.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          goals.length > 0 ? (
+          scopedGoals.length > 0 ? (
             /* ── Stats Row ── */
             <View style={styles.statsRow}>
               <View style={styles.statItem}>

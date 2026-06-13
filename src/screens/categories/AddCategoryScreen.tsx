@@ -34,8 +34,9 @@ export function AddCategoryScreen() {
   const handleAdd = async () => {
     if (!name.trim()) { Alert.alert('Enter a category name'); return; }
     setLoading(true);
-    await addCustomCategory({ name: name.trim(), icon: emoji, emoji, color, type: categoryType });
+    const created = await addCustomCategory({ name: name.trim(), icon: emoji, emoji, color, type: categoryType });
     setLoading(false);
+    route.params?.onCreated?.(created);
     navigation.goBack();
   };
 
